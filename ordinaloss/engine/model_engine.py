@@ -24,8 +24,18 @@ class OrdinalEngine:
         self.loss_fn.to(self.device)
         
     def set_optimizer(self, optimizer_fn, **optimizer_params):
+        '''
+        Setting an optimizer, happens in the __init__
+        '''
+        
         self._optimizer = optimizer_fn(self.model.parameters(), **optimizer_params)
         
+    def forward(self, X, y):
+        #Forward and extract data
+        y_pred = F.softmax(self.model(X), dim = 1) #Normalized
+        loss = self.loss_fn(y_pred, y)
+        accuracy = (y_pred.argmax(axis=1) == y).to(torch.float32).mean()
+        return {"loss": loss, "accuracy": accuracy, "batch_size": X.shape[0]} 
         
     def _train_batch(self, X, y):
         X, y = X.to(self.device), y.to(self.device)
@@ -39,12 +49,6 @@ class OrdinalEngine:
         return stats
         
     
-    def forward(self, X, y):
-        #Forward and extract data
-        y_pred = F.softmax(self.model(X), dim = 1) #Normalized
-        loss = self.loss_fn(y_pred, y)
-        accuracy = (y_pred.argmax(axis=1) == y).to(torch.float32).mean()
-        return {"loss": loss, "accuracy": accuracy, "batch_size": X.shape[0]} 
         
     def _train_epoch(self, loader):
         iterator = tqdm(loader, total = len(loader))
@@ -62,7 +66,7 @@ class OrdinalEngine:
             
             iterator.set_postfix(loss= cum_loss / cum_batch_size, accuracy = cum_accuracy / cum_batch_size, batch_size = cum_batch_size)
             
-            
+    
     def _eval_batch(self, X, y):
         self.model.eval()
         X, y = X.to(self.device), y.to(self.device)
@@ -73,15 +77,19 @@ class OrdinalEngine:
             
     def _eval_epoch(self, loader):
         
+        iterator = tqdm(loader, total = len(loader))
+        
         cum_batch_size = 0 
         cum_loss = 0
         cum_accuracy = 0 
         
-        for X, y in loader:
+        for X, y in iterator:
             stats = self._eval_batch(X, y)
             cum_batch_size += stats["batch_size"]
             cum_loss += stats["loss"].item() * stats["batch_size"]
             cum_accuracy += stats["accuracy"].item() * stats["batch_size"] #Total corrected so far
+            
+            iterator.set_postfix(loss= cum_loss / cum_batch_size, accuracy = cum_accuracy / cum_batch_size, batch_size = cum_batch_size)
             
         return {
                 "loss": cum_loss/cum_batch_size, 

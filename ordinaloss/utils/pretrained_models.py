@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Sun Jul 10 11:38:52 2022
+Created on Mon Aug  1 13:49:54 2022
 
 @author: imargolin
 """
@@ -11,9 +11,13 @@ import torch
 from torch import nn
 from torchvision import models
 
+print(f"loaded {__name__}")
 
 def classification_model_resnet(architecture:str, 
                                 num_classes:int) -> nn.Module:
+    
+    
+    
     all_architectures = {"resnet18": models.resnet18, 
                          "resnet34": models.resnet34,
                          "resnet50": models.resnet50, 
@@ -26,8 +30,11 @@ def classification_model_resnet(architecture:str,
                    "resnet101":models.ResNet101_Weights.DEFAULT,
                    "resnet152":models.ResNet152_Weights.DEFAULT}
     
+    assert architecture in all_architectures, f"Should be one of {all_architectures.keys()}"
+    
     model = all_architectures[architecture](weights=all_weights[architecture], 
-                                           progress = True)
+                                               progress = True)
+    
     
     in_features = model.fc.in_features
     model.fc = torch.nn.Linear(in_features, num_classes)    
@@ -46,6 +53,8 @@ def classification_model_vgg(architecture:str,
                    "vgg19":    models.vgg.VGG19_Weights.DEFAULT,
                    "vgg16_bn": models.vgg.VGG16_BN_Weights.DEFAULT,
                    "vgg19_bn": models.vgg.VGG19_BN_Weights.DEFAULT}
+    
+    assert architecture in all_architectures, f"Should be one of {all_architectures.keys()}"
     
     model = all_architectures[architecture](weights=all_weights[architecture], 
                                            progress = True)
@@ -70,6 +79,8 @@ def classification_model_densenet(architecture:str,
     all_weights = {"densenet121": models.densenet.DenseNet121_Weights.DEFAULT,
                    "densenet169": models.densenet.DenseNet169_Weights.DEFAULT,
                    "densenet201": models.densenet.DenseNet201_Weights.DEFAULT}
+    
+    assert architecture in all_architectures, f"Should be one of {all_architectures.keys()}"
     
     model = all_architectures[architecture](weights=all_weights[architecture], 
                                            progress = True)

@@ -8,6 +8,16 @@ Created on Sun Jul  3 14:43:52 2022
 import torch
 from torch import nn
 import torch.nn.functional as F 
+import numpy as np
+
+def create_ordinal_cost_matrix(size):
+    
+    cost_matrix = np.ones([size,size])
+    for i in range(size):
+        for j in range(size):
+            cost_matrix[i,j] = np.abs(i-j)
+    np.fill_diagonal(cost_matrix, 20)
+    return torch.tensor(cost_matrix,dtype=torch.float32)
 
 
 class CSCELoss(nn.Module):

@@ -9,87 +9,76 @@ from skimage import io
 import torch
 from torch.utils.data import Dataset
 import matplotlib.pyplot as plt
+import pandas as pd
+
+from pathlib import Path
+from PIL import Image
+from torchvision import transforms
 
 IMG_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.ppm', '.bmp', '.pgm']
 import os
 
+def create_metadata_of_imgs(root: str) -> pd.DataFrame:
+    out = []
+    for label_path in Path(root).iterdir():
+        for img in label_path.iterdir():
+            out.append((label_path.name, img.as_posix()))
+    
+    return pd.DataFrame(out, columns = ["label", "full_path"])
 
-class AgeDataSetOnMemory(Dataset):
-    def __init__(self, df, transform=None):
-        #Heavy in memory
-        self.df = df
-        self.idx_to_cat = df["age_category"].cat.categories
-        self.cat_to_idx = {cat:idx for idx, cat in enumerate(self.idx_to_cat)}
-        self.transform = transform
-        
-        #HEAVY!
-        imgs = df["image_path"].apply(io.imread).apply(transform).tolist()
-        self.imgs = torch.stack(imgs)
-        
-    def __getitem__(self, idx):
-        img = self.imgs[idx]
-        label = self.df["age_category"].iloc[idx]
-        label = self.cat_to_idx[label]
-        
-        return img, label
+
+def load_img(path):    
+    with open(path, "rb") as f:
+        img = Image.open(f).convert("RGB")
+    return img
+
+
+def create_transform_pipeline(brightness = 0, 
+                              contrast = 0,
+                              saturation = 0, 
+                              hue=0):
+    pixel_mean, pixel_std = 0.66133188, 0.21229856
     
-    def __len__(self):
-        return len(self.df)
-    
-class AgeDataset(Dataset):
-    def __init__(self, df, device, transform=None):
-        self.df = df
-        self.idx_to_cat = df["age_category"].cat.categories
-        self.cat_to_idx = {cat:idx for idx, cat in enumerate(self.idx_to_cat)}
-        self.transform = transform
-        
-    def __getitem__(self, idx):
-        info = self.df.iloc[idx]
-        
-        image = io.imread(info["image_path"])
-        label = self.cat_to_idx[info["age_category"]]
-        if self.transform:
-            image = self.transform(image) 
-            
-        return image, label
-    
-    def __len__(self):
-        return len(self.df)
-    
-    def visualize_one(self, idx):
-        img, label = self[idx]
-        img = img.permute(1,2,0).detach().numpy()
-        plt.imshow(img)
-        plt.title(f"label: {self.idx_to_cat[label]}")
-        
-#TODO
+    transform_pipeline = transforms.Compose([
+    transforms.ColorJitter(brightness, contrast, saturation, hue),
+    transforms.ToTensor(),
+    transforms.Normalize([pixel_mean]*3, [pixel_std]*3)
+        ])
+    return transform_pipeline
+
+
 class ImageFolder(Dataset):
-    
-    
-    def __init__(self, root, transform=None, target_transform=None):
-        '''
+    """A generic data loader where the images are arranged in this way: ::
         root/dog/xxx.png
         root/dog/xxy.png
         root/dog/xxz.png
         root/cat/123.png
         root/cat/nsdf3.png
         root/cat/asd932_.png
-        '''
-        
-        
-        #classes, class_to_idx = find_classes(root)
-        #imgs = make_dataset(root, class_to_idx)
-        if len(imgs) == 0:
-            raise(RuntimeError("Found 0 images in subfolders of: " + root + "\n"
-                               "Supported image extensions are: " + ",".join(IMG_EXTENSIONS)))
+    Args:
+        root (string): Root directory path.
+        transform (callable, optional): A function/transform that  takes in an PIL image
+            and returns a transformed version. E.g, ``transforms.RandomCrop``
+        target_transform (callable, optional): A function/transform that takes in the
+            target and transforms it.
+        loader (callable, optional): A function to load an image given its path.
+     Attributes:
+        classes (list): List of the class names.
+        class_to_idx (dict): Dict with items (class_name, class_index).
+        imgs (list): List of (image path, class_index) tuples
+    """
 
+    def __init__(self, root, transform=None, target_transform=None):
+        
         self.root = root
-        self.imgs = imgs
-        #self.classes = classes
-        #self.class_to_idx = class_to_idx
+        self.imgs = create_metadata_of_imgs(self.root)
+        
+        labels = self.imgs["label"].unique().tolist()
+        self.target_to_idx = dict(zip(labels, range(len(labels))))
+        self.idx_to_target = {v:k for k,v in self.target_to_idx.items()}
+
         self.transform = transform
         self.target_transform = target_transform
-        #self.loader = loader
 
     def __getitem__(self, index):
         """
@@ -98,17 +87,19 @@ class ImageFolder(Dataset):
         Returns:
             tuple: (image, target) where target is class_index of the target class.
         """
-        path, target = self.imgs[index]
-        img = self.loader(path)
-        if self.transform is not None:
+        
+        target, path = self.imgs.iloc[index]
+        target_idx = self.target_to_idx[target]
+        
+        img = load_img(path)
+        if self.transform:
             img = self.transform(img)
-        if self.target_transform is not None:
+        if self.target_transform:
             target = self.target_transform(target)
 
-        filename = os.path.basename(path)
+        #filename = os.path.basename(path)
 
-        return img, target, filename
+        return img, target_idx
 
     def __len__(self):
         return len(self.imgs)
-
