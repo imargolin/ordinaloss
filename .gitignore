@@ -1,10 +1,3 @@
 __pycache__
 .spyproject
-raw_data
-videos
-gmm_maps
-sessions.csv
-knowme.db
-crap
-tables
-asd.avi
+.ipynb_checkpoints

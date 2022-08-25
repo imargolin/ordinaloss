@@ -13,6 +13,7 @@ from torchvision import models
 
 print(f"loaded {__name__}")
 
+
 def classification_model_resnet(architecture:str, 
                                 num_classes:int) -> nn.Module:
     

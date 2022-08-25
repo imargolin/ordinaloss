@@ -81,6 +81,9 @@ def classification_model_densenet(architecture:str,
     return model
 
 
+
+
+
 if __name__== "__main__":
     
     img = torch.randn((5,3, 32,32)) #(NCHW)
