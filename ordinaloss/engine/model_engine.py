@@ -9,6 +9,8 @@ from torch.optim import Adam
 import torch.nn.functional as F
 import torch
 from tqdm import tqdm
+from torch.optim import lr_scheduler
+
 
 class LRScheduler():
     def __init__(self, init_lr=1.0e-4, lr_decay_epoch=10, 
@@ -35,8 +37,7 @@ class LRScheduler():
 
 class OrdinalEngine:
     def __init__(self, model, loss_fn, device, optimizer_fn = Adam, 
-                 use_lr_scheduler = False, lr_decay_epoch = 10, 
-                 lr_decay_factor = 0.9 , **optimizer_params):
+                 use_lr_scheduler = False, scheduler_lambda_fn = None , **optimizer_params):
 
         self.device = device
         
@@ -47,13 +48,7 @@ class OrdinalEngine:
         self.use_lr_scheduler = use_lr_scheduler
         
         if self.use_lr_scheduler:
-
-            #Setting the init_lr based on the _optimizer of the engine
-            init_lr = self._optimizer.param_groups[0]["lr"]
-
-            self.scheduler = LRScheduler(init_lr = init_lr, 
-                                         lr_decay_epoch=lr_decay_epoch, 
-                                         lr_decay_factor= lr_decay_factor)
+            self.scheduler = lr_scheduler.LambdaLR(self._optimizer, scheduler_lambda_fn) 
 
         self.loss_fn = loss_fn #Should get y_pred and y_true, becomes a method.
         self.loss_fn.to(self.device)
@@ -100,11 +95,6 @@ class OrdinalEngine:
         cum_accuracy = 0 
         cum_mae = 0
 
-        if self.use_lr_scheduler:
-            #Setting the learning rate to something else.
-            self._optimizer = self.scheduler(self._optimizer, self.epochs_trained) 
-        
-        
         for X, y in iterator: 
             stats = self._train_batch(X, y)
             n = stats["batch_size"]
@@ -119,6 +109,9 @@ class OrdinalEngine:
                                  batch_size = cum_batch_size)
 
         self.epochs_trained +=1
+        
+        if self.use_lr_scheduler:
+            self.scheduler.step()
            
     def _eval_batch(self, X, y):
         '''
