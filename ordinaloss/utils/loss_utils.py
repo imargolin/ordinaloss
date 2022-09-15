@@ -10,6 +10,9 @@ from torch import nn
 import torch.nn.functional as F 
 import numpy as np
 
+print(f"loaded {__name__}")
+
+
 def create_ordinal_cost_matrix(size):
     
     cost_matrix = np.ones([size,size])
@@ -49,6 +52,39 @@ class CSCELoss(nn.Module):
         self.cb_matrix = self.cb_matrix.to(device)
 
 
+
+class SinimLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.a = 1
+
+    def forward(self, outputs, labels):
+        #softmax_op = torch.nn.Softmax(1)
+        prob_pred = outputs
+
+        cls_weights = np.array([[1, 3, 5, 7, 9],
+                                [3, 1, 3, 5, 7],
+                                [5, 3, 1, 3, 5],
+                                [7, 5, 3, 1, 3],
+                                [9, 7, 5, 3, 1]], dtype=np.float)
+        cls_weights = cls_weights + 1.0
+        np.fill_diagonal(cls_weights, 0)
+
+        batch_num, class_num = outputs.size()
+
+        class_hot = np.zeros([batch_num, class_num], dtype=np.float32)
+        labels_np = labels.data.cpu().numpy()
+        for ind in range(batch_num):
+            class_hot[ind, :] = cls_weights[labels_np[ind], :]
+        class_hot = torch.from_numpy(class_hot)
+        class_hot = torch.autograd.Variable(class_hot).cuda()
+        # print("prob_pred", prob_pred)
+        # print("1-prob_pred", 1 - prob_pred)
+        loss = torch.sum((prob_pred * class_hot) ** 2) / batch_num
+
+        return loss
+
+
 def OCE(outputs, labels, args):
     '''
     outputs are normalized
@@ -70,14 +106,16 @@ def OCE(outputs, labels, args):
 
     y_labels = np.zeros((labels_np.size, 5))
     y_labels[np.arange(labels_np.size), labels_np] = 1
-    y_labels = torch.from_numpy(y_labels).cuda()
+    y_labels = torch.from_numpy(y_labels)#.cuda()
 
 
     for ind in range(batch_num):
         class_hot[ind, :] = cls_weights[labels_np[ind], :]
     class_hot = torch.from_numpy(class_hot)
-    class_hot = torch.autograd.Variable(class_hot).cuda()
-    class_hot = torch.ones(size=class_hot.shape).to('cuda:0')
+    class_hot = torch.autograd.Variable(class_hot)#.cuda()
+    class_hot = torch.ones(size=class_hot.shape)#.to('cuda:0')
+
+    print(class_hot, y_labels)
 
 
     loss = -1 * torch.sum((
