@@ -25,7 +25,7 @@ class LRScheduler():
         lr = self.init_lr * (self.lr_decay_factor ** (epoch // self.lr_decay_epoch))
         lr = max(lr, 1e-8)
         if epoch % self.lr_decay_epoch == 0:
-            print ('LR is set to {}'.format(lr))
+            print('LR is set to {}'.format(lr))
 
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
