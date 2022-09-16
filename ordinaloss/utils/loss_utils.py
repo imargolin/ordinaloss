@@ -43,7 +43,6 @@ class CSCELoss(nn.Module):
         
         y_true = F.one_hot(y_true, num_classes = self.n_classes)
         
-        
         loss = (y_true * torch.log(y_pred)) + ((1-y_true) * torch.log(1-y_pred))
         
         return -1* (loss * weights).sum(axis=1).mean() #Returns as avg across all samples

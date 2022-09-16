@@ -1,0 +1,16 @@
+artifact_uri: ./mlruns/0/0cc22fa6b36a4f70932f72808d5906bb/artifacts
+deleted_time: 1663331474280
+end_time: 1663331008559
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: deleted
+name: ''
+run_id: 0cc22fa6b36a4f70932f72808d5906bb
+run_uuid: 0cc22fa6b36a4f70932f72808d5906bb
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1663320537294
+status: 3
+tags: []
+user_id: itaym

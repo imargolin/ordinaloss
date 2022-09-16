@@ -10,6 +10,7 @@ import torch.nn.functional as F
 import torch
 from tqdm import tqdm
 from torch.optim import lr_scheduler
+import mlflow
 
 
 class LRScheduler():
@@ -53,6 +54,19 @@ class OrdinalEngine:
         self.loss_fn = loss_fn #Should get y_pred and y_true, becomes a method.
         self.loss_fn.to(self.device)
         self.epochs_trained = 0
+
+        self.init_mlrun()
+        mlflow.log_params(optimizer_params)
+        mlflow.log_param("optimizer_fn", optimizer_fn.__name__)
+        mlflow.log_param("lr_scheduler", self.use_lr_scheduler)
+
+
+
+    
+    def init_mlrun(self):
+        mlflow.end_run() #Ending run if exists.
+        self.r = mlflow.start_run() #Starting a new mlflow run
+        
         
     def set_optimizer(self, optimizer_fn, **optimizer_params):
         '''
@@ -88,7 +102,7 @@ class OrdinalEngine:
         return stats
 
     def _train_epoch(self, loader):
-        iterator = tqdm(loader, total = len(loader))
+        iterator = tqdm(loader, total = len(loader), desc= f"Training, epoch {self.epochs_trained}")
         
         cum_batch_size = 0 
         cum_loss = 0
@@ -102,16 +116,26 @@ class OrdinalEngine:
             cum_batch_size += n
             cum_loss += stats["loss"].item() * n
             cum_accuracy += stats["accuracy"].item() * n #Total corrected so far
-            cum_mae += stats["mae"].item()  *n
-            iterator.set_postfix(loss= cum_loss / cum_batch_size, 
-                                 accuracy = cum_accuracy / cum_batch_size, 
-                                 mae = cum_mae / cum_batch_size,
-                                 batch_size = cum_batch_size)
+            cum_mae += stats["mae"].item() *n
+
+            epoch_loss = cum_loss / cum_batch_size
+            epoch_accuracy = cum_accuracy / cum_batch_size
+            epoch_mae = cum_mae / cum_batch_size
+            epcoh_batch_size = cum_batch_size
+
+            iterator.set_postfix(loss= epoch_loss, 
+                                 accuracy = epoch_accuracy, 
+                                 mae = epoch_mae,
+                                 batch_size = epcoh_batch_size)
 
         self.epochs_trained +=1
         
         if self.use_lr_scheduler:
             self.scheduler.step()
+
+        metrics = {"mae":epoch_mae, "loss":epoch_loss, "accuracy":epoch_accuracy}
+        self.log_metrics(metrics, phase = "train")
+
            
     def _eval_batch(self, X, y):
         '''
@@ -145,10 +169,19 @@ class OrdinalEngine:
             cum_loss += stats["loss"].item() * n
             cum_accuracy += stats["accuracy"].item() * n #Total corrected so far
             cum_mae += stats["mae"].item()  *n
-            iterator.set_postfix(loss= cum_loss / cum_batch_size, 
-                                 accuracy = cum_accuracy / cum_batch_size, 
-                                 mae = cum_mae / cum_batch_size,
-                                 batch_size = cum_batch_size)
+
+            epoch_loss = cum_loss / cum_batch_size
+            epoch_accuracy = cum_accuracy / cum_batch_size
+            epoch_mae = cum_mae / cum_batch_size
+            epcoh_batch_size = cum_batch_size
+            
+            iterator.set_postfix(loss= epoch_loss, 
+                                 accuracy = epoch_accuracy, 
+                                 mae = epoch_mae,
+                                 batch_size = epcoh_batch_size)
+            
+        metrics = {"mae":epoch_mae, "loss":epoch_loss, "accuracy":epoch_accuracy}
+        self.log_metrics(metrics, phase = "test")        
             
         return {
                 "loss": cum_loss/cum_batch_size, 
@@ -156,6 +189,13 @@ class OrdinalEngine:
                 "mae":cum_mae / cum_batch_size,
                 
                }
+
+    def log_metrics(self, metrics, phase):
+        '''
+        metrics is a dictionary with accuracy, mae and loss
+        '''
+        metric_to_log = {f"{k}_{phase}": v for k,v in metrics.items()}
+        mlflow.log_metrics(metric_to_log, step = self.epochs_trained)
         
     def train(self, train_loader, test_loader=None, n_epochs=1):
         for _ in range(n_epochs):
