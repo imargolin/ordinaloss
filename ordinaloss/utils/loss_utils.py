@@ -106,17 +106,14 @@ class GirlsLoss(nn.Module):
 
         y_labels = np.zeros((labels_np.size, 5))
         y_labels[np.arange(labels_np.size), labels_np] = 1
-        y_labels = torch.from_numpy(y_labels)#.cuda()
+        y_labels = torch.from_numpy(y_labels).cuda()
 
 
         for ind in range(batch_num):
             class_hot[ind, :] = cls_weights[labels_np[ind], :]
         class_hot = torch.from_numpy(class_hot)
-        class_hot = torch.autograd.Variable(class_hot)#.cuda()
-        class_hot = torch.ones(size=class_hot.shape)#.to('cuda:0')
-
-        print(class_hot, y_labels)
-
+        class_hot = torch.autograd.Variable(class_hot).cuda()
+        #class_hot = torch.ones(size=class_hot.shape)#.to('cuda:0')
 
         loss = -1 * torch.sum((
                 y_labels * torch.log(prob_pred) + (1 - y_labels) *
