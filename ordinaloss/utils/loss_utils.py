@@ -50,8 +50,6 @@ class CSCELoss(nn.Module):
     def to(self, device):
         self.cb_matrix = self.cb_matrix.to(device)
 
-
-
 class SinimLoss(nn.Module):
     def __init__(self):
         super().__init__()
@@ -83,42 +81,45 @@ class SinimLoss(nn.Module):
 
         return loss
 
+class GirlsLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+    
+    def forward(self, outputs, labels):
+        '''
+        outputs are normalized
+        '''
+        prob_pred = outputs
 
-def OCE(outputs, labels, args):
-    '''
-    outputs are normalized
-    '''
-    prob_pred = outputs
+        cls_weights = np.array([[1, 3, 5, 7, 9],
+                                [3, 1, 3, 5, 7],
+                                [5, 3, 1, 3, 5],
+                                [7, 5, 3, 1, 3],
+                                [9, 7, 5, 3, 1]], dtype=np.float)
+        cls_weights = cls_weights + 1.0
+        np.fill_diagonal(cls_weights, 0)
 
-    cls_weights = np.array([[1, 3, 5, 7, 9],
-                             [3, 1, 3, 5, 7],
-                             [5, 3, 1, 3, 5],
-                             [7, 5, 3, 1, 3],
-                             [9, 7, 5, 3, 1]], dtype=np.float)
-    cls_weights = cls_weights + 1.0
-    np.fill_diagonal(cls_weights, 0)
+        batch_num, class_num = outputs.size()
 
-    batch_num, class_num = outputs.size()
+        class_hot = np.zeros([batch_num, class_num], dtype=np.float32)
+        labels_np = labels.data.cpu().numpy()
 
-    class_hot = np.zeros([batch_num, class_num], dtype=np.float32)
-    labels_np = labels.data.cpu().numpy()
-
-    y_labels = np.zeros((labels_np.size, 5))
-    y_labels[np.arange(labels_np.size), labels_np] = 1
-    y_labels = torch.from_numpy(y_labels)#.cuda()
-
-
-    for ind in range(batch_num):
-        class_hot[ind, :] = cls_weights[labels_np[ind], :]
-    class_hot = torch.from_numpy(class_hot)
-    class_hot = torch.autograd.Variable(class_hot)#.cuda()
-    class_hot = torch.ones(size=class_hot.shape)#.to('cuda:0')
-
-    print(class_hot, y_labels)
+        y_labels = np.zeros((labels_np.size, 5))
+        y_labels[np.arange(labels_np.size), labels_np] = 1
+        y_labels = torch.from_numpy(y_labels)#.cuda()
 
 
-    loss = -1 * torch.sum((
-            y_labels * torch.log(prob_pred) + (1 - y_labels) *
-            torch.log(1 - prob_pred))* class_hot) / batch_num
+        for ind in range(batch_num):
+            class_hot[ind, :] = cls_weights[labels_np[ind], :]
+        class_hot = torch.from_numpy(class_hot)
+        class_hot = torch.autograd.Variable(class_hot)#.cuda()
+        class_hot = torch.ones(size=class_hot.shape)#.to('cuda:0')
 
-    return loss 
+        print(class_hot, y_labels)
+
+
+        loss = -1 * torch.sum((
+                y_labels * torch.log(prob_pred) + (1 - y_labels) *
+                torch.log(1 - prob_pred))* class_hot) / batch_num
+
+        return loss 
