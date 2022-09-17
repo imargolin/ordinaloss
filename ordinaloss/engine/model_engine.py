@@ -59,7 +59,7 @@ class OrdinalEngine:
         mlflow.log_params(optimizer_params)
         mlflow.log_param("optimizer_fn", optimizer_fn.__name__)
         mlflow.log_param("lr_scheduler", self.use_lr_scheduler)
-        mlflow.log_param("loss_fn", loss_fn.__name__)
+        mlflow.log_param("loss_fn", loss_fn.__repr__())
 
 
 

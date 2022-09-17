@@ -81,7 +81,17 @@ def classification_model_densenet(architecture:str,
     return model
 
 
+def create_ordinal_cost_matrix(size):
+    #TODO: Should be have a better specification.
 
+
+    
+    cost_matrix = np.ones([size,size])
+    for i in range(size):
+        for j in range(size):
+            cost_matrix[i,j] = np.abs(i-j)
+    np.fill_diagonal(cost_matrix, 20)
+    return torch.tensor(cost_matrix,dtype=torch.float32)
 
 
 if __name__== "__main__":

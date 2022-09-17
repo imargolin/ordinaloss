@@ -12,21 +12,8 @@ import numpy as np
 
 print(f"loaded {__name__}")
 
-
-def create_ordinal_cost_matrix(size):
-    
-    cost_matrix = np.ones([size,size])
-    for i in range(size):
-        for j in range(size):
-            cost_matrix[i,j] = np.abs(i-j)
-    np.fill_diagonal(cost_matrix, 20)
-    return torch.tensor(cost_matrix,dtype=torch.float32)
-
-
 class CSCELoss(nn.Module):
-    def __init__(self, 
-                 cb_matrix: torch.tensor, 
-                 smoothing=1e-7):
+    def __init__(self, cb_matrix: torch.tensor, smoothing=1e-7):
         super().__init__()
         self.cb_matrix = cb_matrix
         self.n_classes = cb_matrix.shape[0]
@@ -50,7 +37,64 @@ class CSCELoss(nn.Module):
     def to(self, device):
         self.cb_matrix = self.cb_matrix.to(device)
 
+
 class SinimLoss(nn.Module):
+    def __init__(self, ordinal_matrix):
+        super().__init__()
+        self.ordinal_matrix = ordinal_matrix
+        self.ordinal_matrix+=1
+
+        self.n_classes = ordinal_matrix.shape[0]
+        #Filling diagonal
+        for i in range(self.n_classes):
+            self.ordinal_matrix[i,i] = 0
+
+        self.ordinal_matrix = self.ordinal_matrix.cuda()
+
+    def forward(self, y_pred, y_true):
+        weights = self.ordinal_matrix[y_true]
+        y_true = F.one_hot(y_true, num_classes = self.n_classes)
+        return torch.sum((y_pred * weights) ** 2) / y_pred.shape[0]
+
+    def to(self, device):
+        self.ordinal_matrix = self.ordinal_matrix.to(device)
+        return self
+
+class GirlsLoss(nn.Module):
+    def __init__(self, ordinal_matrix):
+        super().__init__()
+        self.ordinal_matrix = ordinal_matrix
+        self.ordinal_matrix+=1
+
+        self.n_classes = ordinal_matrix.shape[0]
+        #Filling diagonal
+        for i in range(self.n_classes):
+            self.ordinal_matrix[i,i] = 0
+
+        self.ordinal_matrix = self.ordinal_matrix.cuda()
+    
+    def forward(self, y_pred, y_true):
+        '''
+        outputs are normalized
+        '''
+
+        weights = self.ordinal_matrix[y_true]
+        y_true = F.one_hot(y_true, num_classes = self.n_classes)
+
+        loss = -1 * torch.sum((
+                y_true * torch.log(y_pred) + (1 - y_true) *
+                torch.log(1 - y_pred))* weights) / y_pred.shape[0]
+
+
+        return loss
+
+    def to(self, device):
+        self.ordinal_matrix = self.ordinal_matrix.to(device)
+        return self
+
+
+
+class SinimLossOld(nn.Module):
     def __init__(self):
         super().__init__()
         self.a = 1
@@ -64,6 +108,7 @@ class SinimLoss(nn.Module):
                                 [5, 3, 1, 3, 5],
                                 [7, 5, 3, 1, 3],
                                 [9, 7, 5, 3, 1]], dtype=np.float)
+
         cls_weights = cls_weights + 1.0
         np.fill_diagonal(cls_weights, 0)
 
@@ -75,15 +120,14 @@ class SinimLoss(nn.Module):
             class_hot[ind, :] = cls_weights[labels_np[ind], :]
         class_hot = torch.from_numpy(class_hot)
         class_hot = torch.autograd.Variable(class_hot).cuda()
-        # print("prob_pred", prob_pred)
-        # print("1-prob_pred", 1 - prob_pred)
         loss = torch.sum((prob_pred * class_hot) ** 2) / batch_num
 
         return loss
 
-class GirlsLoss(nn.Module):
-    def __init__(self):
+class GirlsLossOld(nn.Module):
+    def __init__(self, ordinal_matrix):
         super().__init__()
+        self.ordinal_matrix = ordinal_matrix
     
     def forward(self, outputs, labels):
         '''
@@ -119,4 +163,4 @@ class GirlsLoss(nn.Module):
                 y_labels * torch.log(prob_pred) + (1 - y_labels) *
                 torch.log(1 - prob_pred))* class_hot) / batch_num
 
-        return loss 
+        return loss.to(torch.float32)
