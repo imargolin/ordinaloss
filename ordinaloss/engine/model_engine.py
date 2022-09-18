@@ -11,6 +11,9 @@ import torch
 from tqdm import tqdm
 from torch.optim import lr_scheduler
 import mlflow
+from  mlflow.tracking import MlflowClient
+
+print(f"loaded {__name__}")
 
 
 class LRScheduler():
@@ -60,14 +63,23 @@ class OrdinalEngine:
         mlflow.log_param("optimizer_fn", optimizer_fn.__name__)
         mlflow.log_param("lr_scheduler", self.use_lr_scheduler)
         mlflow.log_param("loss_fn", loss_fn.__repr__())
-
-
-
+        mlflow.log_param("model_name", self.model._get_name())
+        mlflow.log_param("n_layers", len(list(self.model.parameters())))
+        
+        #This is a crucial parameter
+        if hasattr(self.loss_fn, "cb_matrix"):
+            mlflow.log_param("cb_matrix", loss_fn.cb_matrix)
     
     def init_mlrun(self):
+
         mlflow.end_run() #Ending run if exists.
-        self.r = mlflow.start_run() #Starting a new mlflow run
-        
+
+        experiment_names = [experiment.name for experiment in mlflow.list_experiments()]
+        if "OrdinalLoss" not in experiment_names:
+            mlflow.create_experiment("OrdinalLoss")
+
+        experiment_id = mlflow.get_experiment_by_name("OrdinalLoss").experiment_id
+        mlflow.start_run(experiment_id=experiment_id)
         
     def set_optimizer(self, optimizer_fn, **optimizer_params):
         '''
@@ -150,9 +162,10 @@ class OrdinalEngine:
 
         return stats
             
-    def _eval_epoch(self, loader):
+    def _eval_epoch(self, loader, log_metrics = False):
         '''
-        Evaluating the entire epoch
+        Evaluating the entire epoch,
+        logging the metrics only if under self.train() scope.
         '''
 
         iterator = tqdm(loader, total = len(loader))
@@ -182,14 +195,11 @@ class OrdinalEngine:
                                  batch_size = epcoh_batch_size)
             
         metrics = {"mae":epoch_mae, "loss":epoch_loss, "accuracy":epoch_accuracy}
-        self.log_metrics(metrics, phase = "test")        
+
+        if log_metrics:
+            self.log_metrics(metrics, phase = "test")        
             
-        return {
-                "loss": cum_loss/cum_batch_size, 
-                "accuracy":cum_accuracy/cum_batch_size,
-                "mae":cum_mae / cum_batch_size,
-                
-               }
+        return metrics
 
     def log_metrics(self, metrics, phase):
         '''
@@ -202,4 +212,4 @@ class OrdinalEngine:
         for _ in range(n_epochs):
             self._train_epoch(train_loader)
             if test_loader:
-                print(self._eval_epoch(test_loader))
+                print(self._eval_epoch(test_loader, log_metrics=True))
