@@ -131,6 +131,7 @@ class SinimLossOld(nn.Module):
         return loss
 
 class GirlsLossOld(nn.Module):
+    #ogirls code with out bug
     def __init__(self, ordinal_matrix):
         super().__init__()
         self.ordinal_matrix = ordinal_matrix
