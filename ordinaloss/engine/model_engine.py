@@ -38,6 +38,55 @@ class LRScheduler():
         
         return optimizer
 
+from torch.nn import L1Loss
+
+class RegressionEngine:
+    def __init__(self, model, device, optimizer_fn=Adam, **optimizer_params):
+        self.device = device
+        self.model = model
+        self.model.to(self.device)
+
+        self.loss_fn = L1Loss()
+
+        self.set_optimizer(optimizer_fn, **optimizer_params)
+        self.epoch_trained = 0
+
+    def set_optimizer(self, optimizer_fn, **optimizer_params):
+        self._optimizer = optimizer_fn(self.model.parameters(), **optimizer_params)
+
+    def forward(self, X, y):
+        #Forward and extract data
+        y_pred = self.model(X)[:, 0]
+        loss = self.loss_fn(y_pred, y)
+        
+        #numpying
+        y = y.detach().cpu().numpy()
+        y_pred = y_pred.detach().cpu().numpy()
+
+        y_pred = y_pred.clip(-0.499, 5.4999).round()
+        accuracy = (y_pred == y).mean()
+
+        stats = {"loss": loss, 
+                "accuracy": accuracy, 
+                "batch_size": X.shape[0]} 
+        
+        return stats
+
+    def _train_batch(self, X, y):
+        X, y = X.to(self.device), y.to(self.device)
+        
+        self.model.train()
+        self._optimizer.zero_grad()
+        
+        stats = self.forward(X, y)
+        stats["loss"].backward()
+
+        self._optimizer.step()
+        return stats
+
+        
+
+
 
 class OrdinalEngine:
     def __init__(self, model, loss_fn, device, optimizer_fn = Adam, 
