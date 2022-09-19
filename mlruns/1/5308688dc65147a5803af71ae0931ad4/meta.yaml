@@ -1,0 +1,15 @@
+artifact_uri: file:///home/ec2-user/SageMaker/biu/ordinaloss/mlruns/1/5308688dc65147a5803af71ae0931ad4/artifacts
+end_time: 1663530998087
+entry_point_name: ''
+experiment_id: '1'
+lifecycle_stage: active
+name: ''
+run_id: 5308688dc65147a5803af71ae0931ad4
+run_uuid: 5308688dc65147a5803af71ae0931ad4
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1663529061559
+status: 3
+tags: []
+user_id: ec2-user
