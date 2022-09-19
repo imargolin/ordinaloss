@@ -75,7 +75,9 @@ class RegressionEngine:
     def _train_batch(self, X, y):
         X, y = X.to(self.device), y.to(self.device)
         
-        self.model.train()
+        #self.model.train()
+        self.model.eval()
+
         self._optimizer.zero_grad()
         
         stats = self.forward(X, y)
