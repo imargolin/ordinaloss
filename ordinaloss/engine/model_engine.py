@@ -86,10 +86,6 @@ class RegressionEngine:
         self._optimizer.step()
         return stats
 
-        
-
-
-
 class OrdinalEngine:
     def __init__(self, model, loss_fn, device, optimizer_fn = Adam, 
                  use_lr_scheduler = False, scheduler_lambda_fn = None , **optimizer_params):
