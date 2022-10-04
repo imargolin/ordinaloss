@@ -12,6 +12,7 @@ from tqdm import tqdm
 from torch.optim import lr_scheduler
 import mlflow
 
+print(f"loaded {__name__}")
 
 class LRScheduler():
     def __init__(self, init_lr=1.0e-4, lr_decay_epoch=10, 
@@ -37,20 +38,30 @@ class LRScheduler():
 
 
 class OrdinalEngine:
-    def __init__(self, model, loss_fn, device, optimizer_fn = Adam, 
-                 use_lr_scheduler = False, scheduler_lambda_fn = None , **optimizer_params):
+    def __init__(self, model, loss_fn, device, loaders, 
+                optimizer_fn=Adam, use_lr_scheduler=False, 
+                scheduler_lambda_fn=None, **optimizer_params):
 
+
+        #Setting the device
         self.device = device
-        
+
+        #Setting the model
         self.model = model
         self.model.to(self.device)
-        
+
+        #Setting the loaders.
+        self.loaders = loaders
+        self.batch_size = self.loaders["train"].batch_size
+
+        #Setting the optimizer        
         self.set_optimizer(optimizer_fn, **optimizer_params)
         self.use_lr_scheduler = use_lr_scheduler
         
         if self.use_lr_scheduler:
             self.scheduler = lr_scheduler.LambdaLR(self._optimizer, scheduler_lambda_fn) 
 
+        #Setting the loss funciton
         self.loss_fn = loss_fn #Should get y_pred and y_true, becomes a method.
         self.loss_fn.to(self.device)
         self.epochs_trained = 0
@@ -60,14 +71,12 @@ class OrdinalEngine:
         mlflow.log_param("optimizer_fn", optimizer_fn.__name__)
         mlflow.log_param("lr_scheduler", self.use_lr_scheduler)
         mlflow.log_param("loss_fn", loss_fn.__repr__())
-
-
-
+        mlflow.log_param("batch_size", self.batch_size)
+        mlflow.log_param("batch_size", self.batch_size)
     
     def init_mlrun(self):
         mlflow.end_run() #Ending run if exists.
         self.r = mlflow.start_run() #Starting a new mlflow run
-        
         
     def set_optimizer(self, optimizer_fn, **optimizer_params):
         '''
@@ -102,7 +111,10 @@ class OrdinalEngine:
         self._optimizer.step()
         return stats
 
-    def _train_epoch(self, loader):
+    def _train_epoch(self):
+
+        loader = self.loaders["train"]
+
         iterator = tqdm(loader, total = len(loader), desc= f"Training, epoch {self.epochs_trained}")
         
         cum_batch_size = 0 
@@ -150,10 +162,12 @@ class OrdinalEngine:
 
         return stats
             
-    def _eval_epoch(self, loader):
+    def _eval_epoch(self, phase="val"):
         '''
         Evaluating the entire epoch
         '''
+
+        loader = self.loaders[phase]
 
         iterator = tqdm(loader, total = len(loader))
         
@@ -176,20 +190,15 @@ class OrdinalEngine:
             epoch_mae = cum_mae / cum_batch_size
             epcoh_batch_size = cum_batch_size
             
-            iterator.set_postfix(loss= epoch_loss, 
-                                 accuracy = epoch_accuracy, 
-                                 mae = epoch_mae,
-                                 batch_size = epcoh_batch_size)
+            iterator.set_postfix(loss=epoch_loss, 
+                                 accuracy=epoch_accuracy, 
+                                 mae=epoch_mae,
+                                 batch_size=epcoh_batch_size)
             
         metrics = {"mae":epoch_mae, "loss":epoch_loss, "accuracy":epoch_accuracy}
-        self.log_metrics(metrics, phase = "test")        
+        self.log_metrics(metrics, phase=phase)
             
-        return {
-                "loss": cum_loss/cum_batch_size, 
-                "accuracy":cum_accuracy/cum_batch_size,
-                "mae":cum_mae / cum_batch_size,
-                
-               }
+        return metrics
 
     def log_metrics(self, metrics, phase):
         '''
@@ -198,8 +207,8 @@ class OrdinalEngine:
         metric_to_log = {f"{k}_{phase}": v for k,v in metrics.items()}
         mlflow.log_metrics(metric_to_log, step = self.epochs_trained)
         
-    def train(self, train_loader, test_loader=None, n_epochs=1):
+    def train(self, n_epochs=1):
         for _ in range(n_epochs):
-            self._train_epoch(train_loader)
-            if test_loader:
-                print(self._eval_epoch(test_loader))
+            self._train_epoch()
+            self._eval_epoch(phase="val")
+            self._eval_epoch(phase="test")
