@@ -166,4 +166,3 @@ def data_load(data_dir, batch_size):
     num_class = len(dset_classes)
 
     return dset_loaders, dset_size, num_class
-
