@@ -1,0 +1,4 @@
+artifact_location: file:///home/dsi/itaym/projects/ordinaloss/mlruns/3
+experiment_id: '3'
+lifecycle_stage: active
+name: OrdinalEngineNew

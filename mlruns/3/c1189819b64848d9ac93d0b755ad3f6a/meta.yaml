@@ -1,0 +1,15 @@
+artifact_uri: file:///home/dsi/itaym/projects/ordinaloss/mlruns/3/c1189819b64848d9ac93d0b755ad3f6a/artifacts
+end_time: 1667486318801
+entry_point_name: ''
+experiment_id: '3'
+lifecycle_stage: active
+name: ''
+run_id: c1189819b64848d9ac93d0b755ad3f6a
+run_uuid: c1189819b64848d9ac93d0b755ad3f6a
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1667484743820
+status: 3
+tags: []
+user_id: itaym
