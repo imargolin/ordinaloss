@@ -1,0 +1,15 @@
+artifact_uri: file:///C:/Users/imargolin/Documents/self_projects/biu/ordinaloss/mlruns/3/b32e0233260143a19ed0d3e5f00f4af9/artifacts
+end_time: 1663518583540
+entry_point_name: ''
+experiment_id: '3'
+lifecycle_stage: active
+name: ''
+run_id: b32e0233260143a19ed0d3e5f00f4af9
+run_uuid: b32e0233260143a19ed0d3e5f00f4af9
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1663518581869
+status: 3
+tags: []
+user_id: imargolin

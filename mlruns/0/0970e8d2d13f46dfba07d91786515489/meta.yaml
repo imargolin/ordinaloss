@@ -1,0 +1,15 @@
+artifact_uri: ./mlruns/0/0970e8d2d13f46dfba07d91786515489/artifacts
+end_time: 1663517138788
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+name: ''
+run_id: 0970e8d2d13f46dfba07d91786515489
+run_uuid: 0970e8d2d13f46dfba07d91786515489
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1663517070837
+status: 3
+tags: []
+user_id: imargolin
