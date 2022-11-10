@@ -11,7 +11,6 @@ import torch
 from torch import nn
 from torchvision import models
 
-
 def classification_model_resnet(architecture:str, 
                                 num_classes:int) -> nn.Module:
     all_architectures = {"resnet18": models.resnet18, 

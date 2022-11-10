@@ -6,10 +6,7 @@ from tqdm import tqdm
 import torch
 import mlflow
 
-
 print(f"loaded {__name__}")
-
-
 
 class OrdinalEngine:
     def __init__(self, model, loss_fn, device, loaders, 
@@ -49,7 +46,7 @@ class OrdinalEngine:
 
         mlflow.log_params(self.optimizer_params)
         mlflow.log_param("optimizer_fn", self.optimizer_fn.__name__)
-        mlflow.log_param("lr_scheduler", self.use_lr_scheduler)
+        #mlflow.log_param("lr_scheduler", self.use_lr_scheduler)
         mlflow.log_param("loss_fn", self._loss_fn.__repr__())
         mlflow.log_param("model_name", self.model._get_name())
         mlflow.log_param("n_layers", len(list(self.model.parameters())))
@@ -136,18 +133,6 @@ class OrdinalEngine:
         print(bin_counter.average)
         print(loss_metric.average)
         print(accuracy_metric.average)
-
-
-
-
-
-
     
     def _on_epoch_end(self):
-        
-
-
         pass
-
-
-
