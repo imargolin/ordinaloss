@@ -17,7 +17,6 @@ import pandas as pd
 
 print(f"loaded {__name__}")
 
-print(f"loaded {__name__}")
 
 class LRScheduler():
     def __init__(self, init_lr=1.0e-4, lr_decay_epoch=10, 
@@ -323,7 +322,6 @@ class OrdinalEngineNew:
 
         batch_size = y.shape[0]
 
-        self.model.train()
         self._optimizer.zero_grad()
 
         X, y = self.prepare_input(X, y)
@@ -341,8 +339,6 @@ class OrdinalEngineNew:
         '''
         batch_size = y.shape[0]
 
-        self.model.eval()
-
         X, y = self.prepare_input(X, y)
         y_pred = self.forward(X, y)
 
@@ -356,6 +352,7 @@ class OrdinalEngineNew:
 
         iterator = tqdm(loader, total = len(loader), desc= f"Training, epoch {self.epochs_trained}")
         
+
         cum_batch_size = 0 
         cum_loss = 0
 
@@ -383,6 +380,10 @@ class OrdinalEngineNew:
         '''
 
         loader = self.loaders[phase]
+        if phase == "train":
+            self.model.train()
+        else:
+            self.model.eval()
 
         out = []                
         
