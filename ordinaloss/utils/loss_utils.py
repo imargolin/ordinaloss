@@ -46,8 +46,6 @@ class CSCELoss(nn.Module):
         loss = (y_true * torch.log(y_pred)) + ((1-y_true) * torch.log(1-y_pred))
         
         return -1* (loss * weights).sum(axis=1).mean() #Returns as avg across all samples
-
-
     
     def to(self, device):
         self.cb_matrix = self.cb_matrix.to(device)
