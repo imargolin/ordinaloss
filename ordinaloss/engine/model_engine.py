@@ -228,7 +228,6 @@ class OrdinalEngine:
             self._eval_epoch(phase="val", log_metrics=True)
             self._eval_epoch(phase="test", log_metrics=True)
 
-
 class OrdinalEngineNew:
     def __init__(self, model, loss_fn, device, loaders, 
                 optimizer_fn=Adam, use_lr_scheduler=False, 

@@ -1,7 +1,7 @@
-from dataclasses import dataclass, field
 import torch
+from dataclasses import dataclass, field
 
-print(f"loaded {__name__}")
+print(f"loaded {__name__}!!")
 
 @dataclass
 class RunningMetric:
@@ -16,23 +16,23 @@ class RunningMetric:
         self.num_updates += batch_size
         self.average = self.running_total / self.num_updates
 
-@torch.no_grad()
-def accuracy_pytorch(y_pred, y):
-    y_arg_pred = y_pred.argmax(axis=1)
-    return (y_arg_pred == y).to(torch.float32).mean().item()
-
 class BinCounter:
-    def __init__(self, n_classes):
-        self.running_total = torch.zeros(n_classes)
+    def __init__(self, n_classes, device):
+        self.device = device
+        self.running_total = torch.zeros(n_classes, device=self.device)
         self.num_updates = 0
         self.n_classes = n_classes
     
     @torch.no_grad()
     def update(self, y_pred):
-        #values is y_pred after argmax.
-
+        
+        #y_pred after argmax
         counts = y_pred.bincount(minlength=self.n_classes)
-
         self.running_total = self.running_total + counts 
-        self.num_updates += y_pred.shape[0] 
+        self.num_updates += y_pred.shape[0] #batch_size
         self.average = self.running_total / self.num_updates
+
+@torch.no_grad()
+def accuracy_pytorch(y_pred, y):
+    y_arg_pred = y_pred.argmax(axis=1)
+    return (y_arg_pred == y).to(torch.float32).mean().item()
