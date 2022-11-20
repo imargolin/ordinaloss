@@ -1,6 +1,5 @@
-
-from ordinaloss.nextgen_engine.metrics import RunningMetric, BinCounter
-from ordinaloss.nextgen_engine.metrics import accuracy_pytorch
+from ordinaloss.utils.metric_utils import RunningMetric, BinCounter
+from ordinaloss.utils.metric_utils import accuracy_pytorch
 import torch.nn.functional as F
 from tqdm import tqdm
 import torch
@@ -11,7 +10,7 @@ print(f"loaded {__name__}")
 class OrdinalEngine:
     def __init__(self, model, loss_fn, device, loaders, 
                 optimizer_fn, n_classes, use_lr_scheduler=False,
-                scheduler_lambda_fn=None, **optimizer_params):
+                scheduler_lambda_fn=None, callbacks=[],  **optimizer_params):
 
         #Setting the device        
         self.device = device
@@ -31,6 +30,12 @@ class OrdinalEngine:
         self.set_optimizer(optimizer_fn, **self.optimizer_params)
         self.epochs_trained = 0
         self.n_classes = n_classes
+
+        self.callbacks = callbacks
+
+        for callback in self.callbacks:
+            callback.on_init(self)
+
 
         self.init_mlrun()
 
@@ -79,6 +84,10 @@ class OrdinalEngine:
         bin_counter = BinCounter(n_classes = self.n_classes, device=self.device)
 
         iterator = tqdm(loader, total = len(loader), desc= f"Training, epoch {self.epochs_trained}")
+
+        for callback in self.callbacks:
+            callback.on_train_start(self)
+
         for X, y in iterator:
 
             #Batch iteration
@@ -103,8 +112,10 @@ class OrdinalEngine:
                                  accuracy = accuracy_metric.average, 
                                  dist = bin_counter.average) 
 
-        self._on_epoch_end()
+        for callback in self.callbacks:
+            callback.on_train_end(self)
 
+        self.epochs_trained+=1
 
     @torch.no_grad()
     def _eval_epoch(self, phase = "val"):
@@ -130,9 +141,9 @@ class OrdinalEngine:
             iterator.set_postfix(loss = loss_metric.average, 
                                  accuracy = accuracy_metric.average) 
 
-        print(bin_counter.average)
-        print(loss_metric.average)
-        print(accuracy_metric.average)
+        return (bin_counter.average, 
+                loss_metric.average, 
+                accuracy_metric.average)
     
     def _on_epoch_end(self):
         pass
