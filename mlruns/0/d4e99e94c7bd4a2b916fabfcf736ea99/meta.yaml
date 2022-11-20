@@ -1,0 +1,15 @@
+artifact_uri: ./mlruns/0/d4e99e94c7bd4a2b916fabfcf736ea99/artifacts
+end_time: 1664104676053
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+name: ''
+run_id: d4e99e94c7bd4a2b916fabfcf736ea99
+run_uuid: d4e99e94c7bd4a2b916fabfcf736ea99
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1664104634683
+status: 3
+tags: []
+user_id: itaym

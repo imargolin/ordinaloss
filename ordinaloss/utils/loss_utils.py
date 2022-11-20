@@ -5,12 +5,22 @@ Created on Sun Jul  3 14:43:52 2022
 @author: imargolin
 """
 
-import torch
-from torch import nn
-import torch.nn.functional as F 
 import numpy as np
+import torch
+import torch.nn.functional as F
+from torch import nn
 
 print(f"loaded {__name__}")
+
+def create_ordinal_cost_matrix(num_classes, cost_distance, diagonal_value):
+    #TODO: Should be have a better specification.
+    
+    cost_matrix = np.ones([num_classes,num_classes])
+    for i in range(num_classes):
+        for j in range(num_classes):
+            cost_matrix[i,j] = np.abs(i-j) * cost_distance +1
+    np.fill_diagonal(cost_matrix, diagonal_value)
+    return torch.tensor(cost_matrix,dtype=torch.float32)
 
 class CSCELoss(nn.Module):
     def __init__(self, cb_matrix: torch.tensor, smoothing=1e-7):
@@ -36,8 +46,6 @@ class CSCELoss(nn.Module):
         loss = (y_true * torch.log(y_pred)) + ((1-y_true) * torch.log(1-y_pred))
         
         return -1* (loss * weights).sum(axis=1).mean() #Returns as avg across all samples
-
-
     
     def to(self, device):
         self.cb_matrix = self.cb_matrix.to(device)

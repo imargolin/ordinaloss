@@ -11,7 +11,6 @@ import torch
 from torch import nn
 from torchvision import models
 
-
 def classification_model_resnet(architecture:str, 
                                 num_classes:int) -> nn.Module:
     all_architectures = {"resnet18": models.resnet18, 
@@ -81,17 +80,7 @@ def classification_model_densenet(architecture:str,
     return model
 
 
-def create_ordinal_cost_matrix(size):
-    #TODO: Should be have a better specification.
 
-
-    
-    cost_matrix = np.ones([size,size])
-    for i in range(size):
-        for j in range(size):
-            cost_matrix[i,j] = np.abs(i-j)
-    np.fill_diagonal(cost_matrix, 20)
-    return torch.tensor(cost_matrix,dtype=torch.float32)
 
 
 if __name__== "__main__":
