@@ -36,3 +36,7 @@ class BinCounter:
 def accuracy_pytorch(y_pred, y):
     y_arg_pred = y_pred.argmax(axis=1)
     return (y_arg_pred == y).to(torch.float32).mean().item()
+
+def mae_pytorch(y_pred, y):
+    y_arg_pred = y_pred.argmax(axis=1).to(torch.float32)
+    return (y_arg_pred - y).abs().to(torch.float32).mean().item()

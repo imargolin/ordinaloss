@@ -12,7 +12,8 @@ from torch import nn
 
 print(f"loaded {__name__}")
 
-def create_ordinal_cost_matrix(num_classes, cost_distance, diagonal_value):
+def create_ordinal_cost_matrix(num_classes, cost_distance, 
+                               diagonal_value, normalize = True):
     #TODO: Should be have a better specification.
     
     cost_matrix = np.ones([num_classes,num_classes])
@@ -20,6 +21,10 @@ def create_ordinal_cost_matrix(num_classes, cost_distance, diagonal_value):
         for j in range(num_classes):
             cost_matrix[i,j] = np.abs(i-j) * cost_distance +1
     np.fill_diagonal(cost_matrix, diagonal_value)
+    
+    if normalize:
+        cost_matrix = cost_matrix/cost_matrix.sum(axis=1)[:, None]
+
     return torch.tensor(cost_matrix,dtype=torch.float32)
 
 class CSCELoss(nn.Module):
@@ -178,3 +183,28 @@ class GirlsLossOld(nn.Module):
                 torch.log(1 - prob_pred))* class_hot) / batch_num
 
         return loss.to(torch.float32)
+
+class PredictionLoss(nn.Module):
+    def __init__(self, lambdas: torch.tensor):
+        super().__init__()
+        self.lambdas = lambdas
+
+    def forward(self, y_pred: torch.tensor, y_true=None):
+        return self.lambdas.matmul(y_pred.T).mean()
+
+    def to(self, device):
+        self.lambdas.to(device)
+
+class CombinedLoss(nn.Module):
+    def __init__(self, l1, l2):
+        super().__init__()
+        self.l1 = l1
+        self.l2 = l2
+    
+    def forward(self, y_pred, y_true):
+        return self.l1(y_pred, y_true) + self.l2(y_pred, y_true)
+
+    def to(self, device):
+        self.l1.to(device)
+        self.l2.to(device)
+
