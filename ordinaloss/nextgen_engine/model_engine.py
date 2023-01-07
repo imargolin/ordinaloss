@@ -6,12 +6,12 @@ import torch
 import mlflow
 import numpy as np
 
-print(f"loaded {__name__}")
+print(f"loaded {__name__} ")
 
 class EarlyStopper:
-    def __init__(self, patience=1, min_delta=0):
+    def __init__(self, patience=1, min_delta=0.99):
         self.patience = patience
-        self.min_delta = min_delta
+        self.min_delta = min_delta #We want the loss to be 0.99 from the previous epoch.
         self.counter = 0
         self.min_validation_loss = np.inf
 
@@ -22,13 +22,13 @@ class EarlyStopper:
         if validation_loss < self.min_validation_loss:
             self.min_validation_loss = validation_loss
             self.counter = 0
-        elif validation_loss > (self.min_validation_loss - self.min_delta):
+            
+        elif validation_loss > (self.min_validation_loss * self.min_delta):
             print(f"strike {self.counter}! didn't increase by mindelta.")
             self.counter += 1
             if self.counter >= self.patience:
                 return True
         return False
-
 
 class OrdinalEngine:
     def __init__(self, model, loss_fn, device, loaders, 
@@ -44,7 +44,7 @@ class OrdinalEngine:
 
         self.loaders = loaders
 
-        self.set_loss_fn(loss_fn)
+        #self.set_loss_fn(loss_fn)
         
         self.optimizer_params = optimizer_params
         self.optimizer_fn = optimizer_fn
@@ -60,7 +60,7 @@ class OrdinalEngine:
             callback.on_init(self)
 
 
-        self.init_mlrun()
+        #self.init_mlrun()
 
     def init_mlrun(self):
         mlflow.end_run() #Ending run if exists.
@@ -190,12 +190,12 @@ class OrdinalEngine:
                 #Eval on testset (satisfies constraints?)
                 #Modify loss and start retrain
 
-    def satisfy_constraints(self, constraints):
+    # def satisfy_constraints(self, constraints):
         
-        constraints = torch.tensor(constraints, device = self.device)
-        test_dist = self.predict_dist_on_test()
+    #     constraints = torch.tensor(constraints, device = self.device)
+    #     test_dist = self.predict_dist_on_test()
 
-        return (test_dist < constraints).all().item()
+    #     return (test_dist < constraints).all().item()
 
     def predict_dist_on_test(self, phase="test"):
         self.model.eval()

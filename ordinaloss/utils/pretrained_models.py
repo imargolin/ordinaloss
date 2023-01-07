@@ -109,4 +109,4 @@ if __name__== "__main__":
     img = torch.randn((5,3, 32,32)) #(NCHW)
     # model = classification_model_resnet("resnet18", 3)
     # model = classification_model_densenet("densenet121", 3)
-    model = classification_model_vgg("vgg19_bn", 3).eval()
+    #model = classification_model_vgg("vgg19_bn", 3).eval()

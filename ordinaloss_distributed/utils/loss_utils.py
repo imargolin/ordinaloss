@@ -9,6 +9,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 print(f"loaded {__name__}")
 
@@ -54,6 +55,7 @@ class CSCELoss(nn.Module):
     
     def to(self, device):
         self.cb_matrix = self.cb_matrix.to(device)
+        self.cb_matrix = DDP(self.cb_matrix)
 
 class SinimLoss(nn.Module):
     def __init__(self, ordinal_matrix):
