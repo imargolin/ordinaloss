@@ -2,7 +2,6 @@ from ordinaloss.utils.metric_utils import RunningMetric, BinCounter
 from ordinaloss.utils.metric_utils import accuracy_pytorch, mae_pytorch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-from torch.optim import Optimizer
 from torch import nn
 
 from tqdm import tqdm
@@ -11,9 +10,7 @@ import mlflow
 import numpy as np
 
 import torch.multiprocessing as mp
-from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.distributed import init_process_group
 import os
 
 print(f"loaded {__name__} ")
