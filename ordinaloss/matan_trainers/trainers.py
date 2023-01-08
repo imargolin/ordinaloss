@@ -5,13 +5,14 @@ from tqdm import tqdm
 import torch
 import mlflow
 import numpy as np
+import copy
 
-print(f"loaded {__name__} ")
+print(f"loaded {__name__}")
 
 class EarlyStopper:
-    def __init__(self, patience=1, min_delta=0.99):
+    def __init__(self, patience=1, min_delta=0):
         self.patience = patience
-        self.min_delta = min_delta #We want the loss to be 0.99 from the previous epoch.
+        self.min_delta = min_delta
         self.counter = 0
         self.min_validation_loss = np.inf
 
@@ -22,13 +23,13 @@ class EarlyStopper:
         if validation_loss < self.min_validation_loss:
             self.min_validation_loss = validation_loss
             self.counter = 0
-            
-        elif validation_loss > (self.min_validation_loss * self.min_delta):
+        elif validation_loss > (self.min_validation_loss - self.min_delta):
             print(f"strike {self.counter}! didn't increase by mindelta.")
             self.counter += 1
             if self.counter >= self.patience:
                 return True
         return False
+
 
 class OrdinalEngine:
     def __init__(self, model, loss_fn, device, loaders, 
@@ -44,7 +45,7 @@ class OrdinalEngine:
 
         self.loaders = loaders
 
-        #self.set_loss_fn(loss_fn)
+        self.set_loss_fn(loss_fn)
         
         self.optimizer_params = optimizer_params
         self.optimizer_fn = optimizer_fn
@@ -60,7 +61,7 @@ class OrdinalEngine:
             callback.on_init(self)
 
 
-        #self.init_mlrun()
+        # self.init_mlrun()
 
     def init_mlrun(self):
         mlflow.end_run() #Ending run if exists.
@@ -108,7 +109,7 @@ class OrdinalEngine:
         bin_counter = BinCounter(n_classes = self.n_classes, device=self.device)
 
         iterator = tqdm(loader, total = len(loader), desc= f"Training, epoch {self.epochs_trained}")
-
+        max_grad = 0
         for callback in self.callbacks:
             callback.on_train_start(self)
 
@@ -120,10 +121,22 @@ class OrdinalEngine:
 
             self._optimizer.zero_grad()
             y_pred = self.forward(X)
+            
+            if self.n_classes==2:
+                y_pred_loss=y_pred[:,1]
+                loss = self._loss_fn(y_pred_loss, y)
+            else:
+                loss = self._loss_fn(y_pred, y)
 
-            loss = self._loss_fn(y_pred, y)
             loss.backward()
+            
+            with torch.no_grad():
+                
+                current_max_grad = max([x.grad.max() for x in self.model.parameters()])
+                if current_max_grad > max_grad:
+                    max_grad = current_max_grad
 
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 15)
             self._optimizer.step()
 
             accuracy = accuracy_pytorch(y_pred, y)
@@ -132,17 +145,24 @@ class OrdinalEngine:
             mae_metric.update(mae, batch_size)
             accuracy_metric.update(accuracy, batch_size)
             loss_metric.update(loss.item(), batch_size)
-            bin_counter.update(y_pred.argmax(axis=1)) 
+            bin_counter.update(y_pred.argmax(axis=1))
+            
             
             iterator.set_postfix(loss = loss_metric.average, 
                                  accuracy = accuracy_metric.average, 
-                                 mae = mae_metric.average)
+                                 mae = mae_metric.average, max_grad=max_grad)
 
         for callback in self.callbacks:
             callback.on_train_end(self)
 
         self.epochs_trained+=1
-
+        
+        return {
+            "loss": loss_metric.average,
+            "accuracy": accuracy_metric.average
+            # "mae":cum_mae / cum_batch_size,
+                }
+        
     @torch.no_grad()
     def _eval_epoch(self, phase = "val"):
         self.model.eval()
@@ -157,7 +177,13 @@ class OrdinalEngine:
             X, y = self.prepare_input(X, y)
             batch_size = y.shape[0]
             y_pred = self.forward(X)
-            loss = self._loss_fn(y_pred, y)
+            
+            if self.n_classes==2:
+                y_pred_loss=y_pred[:,1]
+                loss = self._loss_fn(y_pred_loss, y)
+            else:
+                loss = self._loss_fn(y_pred, y)
+                
             accuracy = accuracy_pytorch(y_pred, y)
 
             accuracy_metric.update(accuracy, batch_size)
@@ -167,9 +193,12 @@ class OrdinalEngine:
             iterator.set_postfix(loss = loss_metric.average, 
                                  accuracy = accuracy_metric.average) 
 
-        return (bin_counter.average, 
-                loss_metric.average, 
-                accuracy_metric.average)
+        return {
+            'bin_counter' : bin_counter.average,
+            "loss": loss_metric.average,
+            "accuracy": accuracy_metric.average
+            # "mae":cum_mae / cum_batch_size,
+                }
 
     def train_until_converge(self, n_epochs, patience, min_delta):
 
@@ -190,12 +219,12 @@ class OrdinalEngine:
                 #Eval on testset (satisfies constraints?)
                 #Modify loss and start retrain
 
-    # def satisfy_constraints(self, constraints):
+    def satisfy_constraints(self, constraints):
         
-    #     constraints = torch.tensor(constraints, device = self.device)
-    #     test_dist = self.predict_dist_on_test()
+        constraints = torch.tensor(constraints, device = self.device)
+        test_dist = self.predict_dist_on_test()
 
-    #     return (test_dist < constraints).all().item()
+        return (test_dist < constraints).all().item()
 
     def predict_dist_on_test(self, phase="test"):
         self.model.eval()
@@ -211,7 +240,19 @@ class OrdinalEngine:
         return bin_counter.average
 
 
-        
+    def train(self, test_loader=True, n_epochs=10):
+            best_acc_train = 0
+            best_acc_test = 0
+            best_model = copy.deepcopy(self.model)
+            for _ in range(n_epochs):
+                res = self._train_epoch()
+                if res['accuracy']> best_acc_train:
+                    best_acc_train = res['accuracy']
 
-
-
+                if test_loader:
+                    res_test = self._eval_epoch(phase = "val")
+                    if res_test['accuracy']> best_acc_test:
+                        best_acc_test = res_test['accuracy']
+                        best_model = copy.deepcopy(self.model)
+                        
+            return best_acc_train,best_acc_test,best_model

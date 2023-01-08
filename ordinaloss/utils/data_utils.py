@@ -2,8 +2,6 @@
 
 import os, sys, pdb
 import torch.utils.data as data
-from torch.utils.data import DataLoader, Dataset
-from torch.utils.data.distributed import DistributedSampler
 
 from PIL import Image
 import os.path
@@ -70,7 +68,7 @@ def default_loader(path):
     else:
         return pil_loader(path)
 
-class ImageFolder(Dataset):
+class ImageFolder(data.Dataset):
     """A generic data loader where the images are arranged in this way: ::
         root/dog/xxx.png
         root/dog/xxy.png
@@ -106,7 +104,8 @@ class ImageFolder(Dataset):
         self.transform = transform
         self.target_transform = target_transform
         self.loader = loader
-
+        self_class1 = 0
+        
     def __getitem__(self, index):
         """
         Args:
@@ -128,101 +127,58 @@ class ImageFolder(Dataset):
     def __len__(self):
         return len(self.imgs)
 
-
-def create_datasets(data_dir, phases = ['train', 'val', 'test', 'auto_test']):
+def data_load(data_dir, batch_size, db ='knee', phases= ['train', 'val', 'test', 'auto_test']):
     pixel_mean, pixel_std = 0.66133188,  0.21229856
-    data_transform = {
-        'train': transforms.Compose([
-            transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.3),
-            transforms.ToTensor(),
-            transforms.Normalize([pixel_mean]*3, [pixel_std]*3)
-        ]),
-        'val': transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize([pixel_mean]*3, [pixel_std]*3)
-        ]),
-        'test': transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize([pixel_mean]*3, [pixel_std]*3)
-        ]),
-        'auto_test': transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize([pixel_mean]*3, [pixel_std]*3)
-        ]),
-        'most_test': transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize([pixel_mean]*3, [pixel_std]*3)
-        ]),
-        'most_auto_test': transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize([pixel_mean]*3, [pixel_std]*3)
-        ])
-    }
-
-    dsets = {x: ImageFolder(os.path.join(data_dir, x), data_transform[x]) for x in phases}
-    return dsets
-
-
-def load_multi_gpu(dsets, batch_size):
-    out = {}
-    for phase, dataset in dsets.items():
-        out[phase] = DataLoader(
-            dataset, 
-            batch_size=batch_size,
-            shuffle=False, 
-            #num_workers=4, 
-            pin_memory=True,
-            sampler=DistributedSampler(dataset)
-            )
-    return out
-
-
-def load_single_gpu(dsets, batch_size):
-    out = {}
-    for phase, dataset in dsets.items():
-        out[phase] = DataLoader(
-            dataset, 
-            batch_size=batch_size,
-            shuffle=(phase=="train"), 
-            pin_memory=False,
-            num_workers = 4
-            )
-    return out
-
-
-
-
-def data_load(data_dir, batch_size):
-    pixel_mean, pixel_std = 0.66133188,  0.21229856
-    phases = ['train', 'val', 'test', 'auto_test']
     # phases = ['train', 'val', 'test', 'auto_test']
-    data_transform = {
-        'train': transforms.Compose([
-            transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.3),
+    if db =='knee':
+        data_transform = {
+            'train': transforms.Compose([
+                transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.3),
+                transforms.ToTensor(),
+                transforms.Normalize([pixel_mean]*3, [pixel_std]*3)
+            ]),
+            'val': transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize([pixel_mean]*3, [pixel_std]*3)
+            ]),
+            'test': transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize([pixel_mean]*3, [pixel_std]*3)
+            ]),
+            'auto_test': transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize([pixel_mean]*3, [pixel_std]*3)
+            ]),
+            'most_test': transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize([pixel_mean]*3, [pixel_std]*3)
+            ]),
+            'most_auto_test': transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize([pixel_mean]*3, [pixel_std]*3)
+            ])
+        }
+        
+    if db =='Melanoma':
+        data_transform = {
+            'train': transforms.Compose([
+            transforms.Resize((50, 50)),
             transforms.ToTensor(),
-            transforms.Normalize([pixel_mean]*3, [pixel_std]*3)
-        ]),
-        'val': transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize([pixel_mean]*3, [pixel_std]*3)
-        ]),
-        'test': transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize([pixel_mean]*3, [pixel_std]*3)
-        ]),
-        'auto_test': transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize([pixel_mean]*3, [pixel_std]*3)
-        ]),
-        'most_test': transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize([pixel_mean]*3, [pixel_std]*3)
-        ]),
-        'most_auto_test': transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize([pixel_mean]*3, [pixel_std]*3)
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
         ])
-    }
+,
+            'val': transforms.Compose([
+            transforms.Resize((50, 50)),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+        ])
+,
+            'test': transforms.Compose([
+            transforms.Resize((50, 50)),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+        ])
+        }
 
     dsets = {x: ImageFolder(os.path.join(data_dir, x), data_transform[x]) for x in phases}
     dset_loaders = {x: torch.utils.data.DataLoader(dsets[x], batch_size=batch_size,
