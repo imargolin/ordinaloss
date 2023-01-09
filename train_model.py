@@ -88,8 +88,10 @@ def train_single_gpu(
     constraints = torch.tensor([1.00, 1.00, 1.00, 0.05, 1.00], device= device_id)
     current_lambdas = torch.tensor([0.00, 0.00, 0.00, 0.00, 0.00], device= device_id)
 
+
     while True:
-        
+        mlflow.log_metrics({f"lambda_{k}": v for k,v in enumerate(current_lambdas.tolist())}, step = trainer.epochs_trained)
+
         csce_loss = CSCELoss(cost_matrix)
         prediction_loss = PredictionLoss(lambdas = current_lambdas)
         loss_fn = CombinedLoss(csce_loss, prediction_loss)
@@ -98,13 +100,15 @@ def train_single_gpu(
         trainer.train_until_converge(n_epochs=n_epochs, patience=patience, min_delta=min_delta)
 
         test_results = trainer._eval_epoch("test")
-        test_distribution = torch.tensor(test_results["distribution"], device=device_id)
-        print(f"====Distribution test: {test_distribution.tolist()}====")
+
+        test_distribution = torch.tensor(test_results["test_distribution"], device=device_id)
+        
+        #Logging the distribution of test
+        mlflow.log_metrics({f"test_dist_{k}": v for k,v in enumerate(test_distribution.tolist())})
 
         if not satisfy_constraints(test_distribution, constraints):
             #modify loss function
             current_lambdas = modify_lambdas(constraints, test_distribution, current_lambdas, meta_lr).to(device=device_id)
-            print(f"====Updated lambdas! The new lambdas are {current_lambdas.tolist()}====")
 
         else:
             break
@@ -155,7 +159,7 @@ if __name__ == "__main__":
     parser.add_argument('--weight_decay', default=5.0e-2, type=float, help="weight decay")
     parser.add_argument('--num_classes', default=5, type=int, help="Total number of classes")
     parser.add_argument('--save_every', default=3, type=int, help="How many epochs between each save")
-    parser.add_argument('--is_mock', default=0, type=int, help="How many epochs between each save")
+    parser.add_argument('--is_mock', default=0, type=int, help="Use 1 to dry run on random data")
     
     args = parser.parse_args()
     #all_args = vars(args)

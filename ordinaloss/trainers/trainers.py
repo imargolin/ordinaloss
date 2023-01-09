@@ -22,7 +22,8 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
 from ordinaloss.utils.metric_utils import RunningMetric, BinCounter, StatsCollector
 from ordinaloss.utils.metric_utils import accuracy_pytorch, mae_pytorch
-
+from ordinaloss.utils.basic_utils import get_only_metrics
+from sklearn.metrics import accuracy_score, mean_absolute_error
 
 print(f"loaded {__name__}")
 
@@ -34,8 +35,8 @@ class EarlyStopper:
         self.min_validation_loss = np.inf
 
     def early_stop(self, validation_loss):
-        print(f"Minimum validation loss: {self.min_validation_loss:.5f}")
-        print(f"Current validation loss: {validation_loss:.5f}")
+        #print(f"Minimum validation loss: {self.min_validation_loss:.5f}")
+        #print(f"Current validation loss: {validation_loss:.5f}")
 
         if validation_loss < self.min_validation_loss:
             self.min_validation_loss = validation_loss
@@ -88,6 +89,7 @@ class SingleGPUTrainer:
         self.optimizer = optimizer
         self.save_every = save_every
         self.num_classes = num_classes
+        self.epochs_trained = 0
 
     def forward(self, X):
         return F.softmax(self.model(X), dim = 1) #Normalized        
@@ -95,15 +97,14 @@ class SingleGPUTrainer:
     def prepare_input(self, X, y):
         return X.to(self.gpu_id), y.to(self.gpu_id)
 
-    def _train_epoch(self, epoch):
+    def _train_epoch(self):
         
         self.model.train()
 
-        accuracy_metric = RunningMetric()
         loss_metric = RunningMetric()
-        mae_metric = RunningMetric()
+        collector = StatsCollector()
 
-        loader = tqdm(self.loaders["train"], total = len(self.loaders["train"]), desc= f"Training, epoch {epoch}")
+        loader = tqdm(self.loaders["train"], total = len(self.loaders["train"]), desc= f"Training, epoch {self.epochs_trained}")
 
         for X, y in loader:
 
@@ -119,25 +120,38 @@ class SingleGPUTrainer:
 
             self.optimizer.step()
 
-            accuracy = accuracy_pytorch(y_pred, y)
-            mae = mae_pytorch(y_pred, y)
-
-            mae_metric.update(mae, batch_size)
-            accuracy_metric.update(accuracy, batch_size)
             loss_metric.update(loss.item(), batch_size)
+            collector.update(y_pred, y)
             
             loader.set_postfix(
-                loss = loss_metric.average, 
-                accuracy = accuracy_metric.average, 
-                mae = mae_metric.average)
+                loss = loss_metric.average)
+
+        y_pred_all = collector.collect_y_pred().argmax(axis=1)
+        y_true_all = collector.collect_y_true()
+
+        mae = mean_absolute_error(y_true_all, y_pred_all)
+        accuracy = accuracy_score(y_true_all, y_pred_all)
+       
+        distribution = np.bincount(y_pred_all, minlength=self.num_classes)
+        distribution = distribution/distribution.sum()
+
+        self.epochs_trained +=1
+
+        results = {
+            "train_distribution": distribution, #numpy array
+            "train_loss": loss_metric.average, #single value
+            "train_accuracy":accuracy, #single value
+            "train_mae": mae
+            }
+
+        return results
         
     @torch.no_grad()
     def _eval_epoch(self, phase):
 
         self.model.eval()
 
-        accuracy_metric = RunningMetric()
-        loss_metric = RunningMetric()
+        loss_metric = RunningMetric()        
         collector = StatsCollector()
 
         loader = self.loaders[phase]
@@ -147,35 +161,50 @@ class SingleGPUTrainer:
             batch_size = y.shape[0]
             y_pred = self.forward(X)
             loss = self.loss_fn(y_pred, y)
-            accuracy = accuracy_pytorch(y_pred, y)
 
-            accuracy_metric.update(accuracy, batch_size)
             loss_metric.update(loss.item(), batch_size)
             collector.update(y_pred, y)
         
-        distribution = np.bincount(collector.collect_y_pred().argmax(axis=1), minlength=self.num_classes)
+        y_pred_all = collector.collect_y_pred().argmax(axis=1)
+        y_true_all = collector.collect_y_true()
+
+        #Some metrics
+        
+        mae = mean_absolute_error(y_true_all, y_pred_all)
+        accuracy = accuracy_score(y_true_all, y_pred_all)
+       
+        distribution = np.bincount(y_pred_all, minlength=self.num_classes)
         distribution = distribution/distribution.sum()
 
-        return {
-            "distribution": distribution, #numpy array
-            "loss": loss_metric.average, #single value
-            "accuracy":accuracy_metric.average #single value
+        results = {
+            f"{phase}_distribution": distribution, #numpy array
+            f"{phase}_loss": loss_metric.average, #single value
+            f"{phase}_accuracy":accuracy, #single value
+            f"{phase}_mae": mae #single value
             }
+
+        return results
 
     def train_until_converge(self, n_epochs, patience, min_delta):
 
-        epochs_trained = 0
         early_stopper = EarlyStopper(
             patience=patience, 
             min_delta=min_delta)
 
         for i in range(n_epochs):
-            self._train_epoch(epochs_trained)
-            results = self._eval_epoch("val")
-            if early_stopper.early_stop(results["loss"]):
+            train_results = self._train_epoch()
+            val_results = self._eval_epoch("val")
+
+            #print(get_only_metrics(val_results))
+            #print(get_only_metrics(train_results))
+
+            mlflow.log_metrics(get_only_metrics(val_results), step = self.epochs_trained)
+            mlflow.log_metrics(get_only_metrics(train_results), step = self.epochs_trained)
+
+            if early_stopper.early_stop(val_results["val_loss"]):
                 print("model converged!")
                 break #Model converged.
-            epochs_trained+=1
+            
     
     def set_loss_fn(self, loss_fn:nn.Module):
         self.loss_fn = loss_fn

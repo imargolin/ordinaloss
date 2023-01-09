@@ -7,6 +7,11 @@ Created on Sun Jul 10 11:38:52 2022
 
 import numpy as np
 import torch
+import numbers
+
+
+def get_only_metrics(my_dict:dict):
+    return {k:v for k,v in my_dict.items() if isinstance(v, numbers.Number)}
 
 
 def satisfy_constraints(test_dist:torch.Tensor, constraints: torch.Tensor) -> bool:

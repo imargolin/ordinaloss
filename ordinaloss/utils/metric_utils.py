@@ -2,7 +2,7 @@ import torch
 from dataclasses import dataclass, field
 import numpy as np
 
-print(f"loaded {__name__}!!")
+print(f"loaded {__name__}")
 
 @dataclass
 class RunningMetric:
@@ -17,6 +17,7 @@ class RunningMetric:
         self.num_updates += batch_size
         self.average = self.running_total / self.num_updates
 
+#Not so used
 class BinCounter:
     def __init__(self, n_classes, device):
         self.device = device
