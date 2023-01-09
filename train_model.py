@@ -145,7 +145,7 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description='simple distributed training job')
     
-    parser.add_argument('--n_epochs', default=20, type=int, help='Total maximum epochs to train the model')
+    parser.add_argument('--n_epochs', default=80, type=int, help='Total maximum epochs to train the model')
     parser.add_argument('--batch_size', default=32, type=int, help='Input batch size on each device')
     parser.add_argument('--n_procs', default=1, type=int, help="Total number of processes (GPUs used)")
     parser.add_argument('--device_id', default=0, type=int, help="The device, used only if n_procs is 1")
