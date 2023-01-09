@@ -64,8 +64,8 @@ def train_single_gpu(
 
     if is_mock:
         print("====RUNNING MOCK VERSION=====")
-        model = create_mock_model()
-        dsets = create_mock_dsets()
+        model = create_mock_model(num_classes=num_classes)
+        dsets = create_mock_dsets(num_classes=num_classes)
 
     else:
         model = classification_model_vgg("vgg19", num_classes=num_classes)
@@ -97,6 +97,7 @@ def train_single_gpu(
         loss_fn = CombinedLoss(csce_loss, prediction_loss)
 
         trainer.set_loss_fn(loss_fn)
+        
         trainer.train_until_converge(n_epochs=n_epochs, patience=patience, min_delta=min_delta)
 
         test_results = trainer._eval_epoch("test")
@@ -104,7 +105,7 @@ def train_single_gpu(
         test_distribution = torch.tensor(test_results["test_distribution"], device=device_id)
         
         #Logging the distribution of test
-        mlflow.log_metrics({f"test_dist_{k}": v for k,v in enumerate(test_distribution.tolist())})
+        mlflow.log_metrics({f"test_dist_{k}": v for k,v in enumerate(test_distribution.tolist())}, step = trainer.epochs_trained)
 
         if not satisfy_constraints(test_distribution, constraints):
             #modify loss function
@@ -162,7 +163,6 @@ if __name__ == "__main__":
     parser.add_argument('--is_mock', default=0, type=int, help="Use 1 to dry run on random data")
     
     args = parser.parse_args()
-    #all_args = vars(args)
 
     if args.n_procs==-1 or args.n_procs>1:
         print(f"Training in a distributed mode, device id is {args.device_id}")
@@ -173,11 +173,7 @@ if __name__ == "__main__":
 
         mp.spawn(train_multi_gpu, args=(world_size, args.total_epochs, args.batch_size), nprocs=world_size)
 
-
     else:
         print(f"Training on a single mode, device id is {args.device_id}")
         train_single_gpu(**vars(args))
         print("DONE!")
-
-        #a = mp.spawn(main, args=(world_size, args.total_epochs, args.batch_size), nprocs=world_size)
-    

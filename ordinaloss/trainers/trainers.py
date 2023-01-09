@@ -195,9 +195,6 @@ class SingleGPUTrainer:
             train_results = self._train_epoch()
             val_results = self._eval_epoch("val")
 
-            #print(get_only_metrics(val_results))
-            #print(get_only_metrics(train_results))
-
             mlflow.log_metrics(get_only_metrics(val_results), step = self.epochs_trained)
             mlflow.log_metrics(get_only_metrics(train_results), step = self.epochs_trained)
 

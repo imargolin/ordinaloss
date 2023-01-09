@@ -17,6 +17,22 @@ class RunningMetric:
         self.num_updates += batch_size
         self.average = self.running_total / self.num_updates
 
+class StatsCollector:
+    def __init__(self):
+        self.y_pred = []
+        self.y_true = []
+    
+    @torch.no_grad()
+    def update(self, y_pred, y_true):
+        self.y_pred.append(y_pred.cpu().numpy())
+        self.y_true.append(y_true.cpu().numpy())
+
+    def collect_y_pred(self) -> np.array:
+        return np.concatenate(self.y_pred)
+        
+    def collect_y_true(self)-> np.array:
+        return np.concatenate(self.y_true, axis=-1)
+
 #Not so used
 class BinCounter:
     def __init__(self, n_classes, device):
@@ -34,28 +50,13 @@ class BinCounter:
         self.num_updates += y_pred.shape[0] #batch_size
         self.average = self.running_total / self.num_updates
 
-class StatsCollector:
-    def __init__(self):
-        self.y_pred = []
-        self.y_true = []
-    
-    @torch.no_grad()
-    def update(self, y_pred, y_true):
-        self.y_pred.append(y_pred.cpu().numpy())
-        self.y_true.append(y_true.cpu().numpy())
-
-    def collect_y_pred(self) -> np.array:
-        return np.concatenate(self.y_pred)
-        
-    def collect_y_true(self)-> np.array:
-        return np.concatenate(self.y_true, axis=-1)
-
 
 @torch.no_grad()
 def accuracy_pytorch(y_pred, y):
     y_arg_pred = y_pred.argmax(axis=1)
     return (y_arg_pred == y).to(torch.float32).mean().item()
 
+@torch.no_grad()
 def mae_pytorch(y_pred, y):
     y_arg_pred = y_pred.argmax(axis=1).to(torch.float32)
     return (y_arg_pred - y).abs().to(torch.float32).mean().item()
