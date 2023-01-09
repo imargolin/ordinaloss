@@ -109,8 +109,7 @@ class SingleGPUTrainer:
         self.num_classes = num_classes
         self.epochs_trained = 0
         
-        
-        self.CHECKPOINT_PATH = Path("models", f"{uuid.uuid4().hex}.pt")
+        self.checkpoint_path = Path("models", f"{uuid.uuid4().hex}.pt")
 
     def forward(self, X):
         return F.softmax(self.model(X), dim = 1) #Normalized        
@@ -224,26 +223,20 @@ class SingleGPUTrainer:
             if early_stopper.is_best_model:
                 #This is the best model so far, let's save it.
                 
-                hash_indicator = list(self.model.parameters())[0].detach().cpu().mean()
-                print(f"Saving model... {hash_indicator}") #Just to make sure everything is working.
                 best_epoch_idx = self.epochs_trained
                 self._save_checkpoint()
 
             if early_stopper.early_stop:
-                print(f"Model Converged!")
                 break #Model converged.
-        
-        self.model.load_state_dict(torch.load(self.CHECKPOINT_PATH))
-        self.epochs_trained = best_epoch_idx
-        hash_indicator = list(self.model.parameters())[0].detach().cpu().mean()
 
-        print(f"Done training, hash indicator now: {hash_indicator}, at epoch {best_epoch_idx}")
+        print(f"Model Converged! the best validation loss is {early_stopper.min_validation_loss}")
+        self.model.load_state_dict(torch.load(self.checkpoint_path))
+        self.epochs_trained = best_epoch_idx
     
     def _save_checkpoint(self):
         ckp = self.model.state_dict()
-        torch.save(ckp, self.CHECKPOINT_PATH)
+        torch.save(ckp, self.checkpoint_path)
 
-    
     def set_loss_fn(self, loss_fn:nn.Module):
         self.loss_fn = loss_fn
         self.loss_fn.to(self.gpu_id)

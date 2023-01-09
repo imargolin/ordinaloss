@@ -56,6 +56,7 @@ def train_single_gpu(
                     num_classes:int,
                     save_every:int,
                     is_mock:bool,
+                    model_architecture:str,
                     **kwargs
                     ):
 
@@ -66,7 +67,7 @@ def train_single_gpu(
         dsets = create_mock_dsets(num_classes=num_classes)
 
     else:
-        model = classification_model_vgg("vgg19", num_classes=num_classes)
+        model = classification_model_vgg(model_architecture, num_classes=num_classes)
         dsets = create_datasets("../datasets/kneeKL224/")
 
     mlflow.end_run()
@@ -158,6 +159,9 @@ if __name__ == "__main__":
     parser.add_argument('--num_classes', default=5, type=int, help="Total number of classes")
     parser.add_argument('--save_every', default=3, type=int, help="How many epochs between each save")
     parser.add_argument('--is_mock', default=0, type=int, help="Use 1 to dry run on random data")
+    parser.add_argument('--model_architecture', default="vgg19", type=str, help="One of vgg19 or vgg16")
+
+
     
     args = parser.parse_args()
 
