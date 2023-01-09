@@ -1,7 +1,7 @@
 import torch
 from torch import nn
-from ordinaloss_distributed.engine.trainer import Trainer
-from ordinaloss.trainers.trainers import SingleGPUTrainer
+#from ordinaloss_distributed.engine.trainer import Trainer
+from ordinaloss.trainers.trainers import SingleGPUTrainer, MultiGPUTrainer
 from ordinaloss.utils.pretrained_models import classification_model_vgg, DummyModel
 from ordinaloss.utils.data_utils import create_datasets, load_multi_gpu, load_single_gpu
 from torch.optim import SGD
@@ -15,8 +15,6 @@ import argparse
 import torch.multiprocessing as mp
 import sys
 import mlflow
-
-
 
 
 from torch.utils.data import TensorDataset, DataLoader
@@ -88,7 +86,6 @@ def train_single_gpu(
     constraints = torch.tensor([1.00, 1.00, 1.00, 0.05, 1.00], device= device_id)
     current_lambdas = torch.tensor([0.00, 0.00, 0.00, 0.00, 0.00], device= device_id)
 
-
     while True:
         mlflow.log_metrics({f"lambda_{k}": v for k,v in enumerate(current_lambdas.tolist())}, step = trainer.epochs_trained)
 
@@ -134,7 +131,7 @@ def train_multi_gpu(device:int, world_size:int, n_epochs:int, batch_size:int):
     cost_matrix = create_ordinal_cost_matrix(5, cost_distance=COST_DISTANCE, diagonal_value=DIAGONAL_VALUE)
     csce_loss = CSCELoss(cost_matrix)
     
-    trainer = Trainer(model, train_data=loaders["train"], validation_data=loaders["val"], optimizer = optimizer, gpu_id=device, save_every=3)
+    trainer = MultiGPUTrainer(model, train_data=loaders["train"], validation_data=loaders["val"], optimizer = optimizer, gpu_id=device, save_every=3)
     trainer.set_loss_fn(csce_loss) #The loss is assigned again
 
     trainer._train_epoch(epoch=0)
@@ -155,7 +152,7 @@ if __name__ == "__main__":
     parser.add_argument('--patience', default=3, type=int, help="The patience of the model for raise in loss")
     parser.add_argument('--cost_distance', default=3.0, type=float, help="The cost distance between 2 cosecutive orders")
     parser.add_argument('--diagonal_value', default=20.0, type=float, help="The diagonal value of the loss function")
-    parser.add_argument('--min_delta', default=1.01, type=float, help="The minimum delta for early stopping")
+    parser.add_argument('--min_delta', default=1.0, type=float, help="The minimum delta for early stopping")
     parser.add_argument('--lr', default=1.0e-3, type=float, help="ordindary learning rate")
     parser.add_argument('--weight_decay', default=5.0e-2, type=float, help="weight decay")
     parser.add_argument('--num_classes', default=5, type=int, help="Total number of classes")

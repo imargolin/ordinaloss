@@ -7,7 +7,7 @@ Created on Sun Jul 10 11:38:37 2022
 
 from torch.optim import Adam
 
-from typing import List, Set, Dict, Tuple
+from typing import Any, List, Set, Dict, Tuple
 
 import torch.nn.functional as F
 import torch
@@ -24,30 +24,48 @@ from ordinaloss.utils.metric_utils import RunningMetric, BinCounter, StatsCollec
 from ordinaloss.utils.metric_utils import accuracy_pytorch, mae_pytorch
 from ordinaloss.utils.basic_utils import get_only_metrics
 from sklearn.metrics import accuracy_score, mean_absolute_error
+import os
+import uuid
+from pathlib import Path
 
 print(f"loaded {__name__}")
 
 class EarlyStopper:
-    def __init__(self, patience=1, min_delta=1.01):
+    def __init__(self, patience:int = 5, min_delta:float =1.0):
+        """My small implementation for early stopping.
+
+        Args:
+            patience (int, optional): How long to wait after last time validation loss improved. Defaults to 5.
+            min_delta (float, optional): Minimum change in the monitored quantity to qualify as an improvement. Defaults to 1.0
+        """
         self.patience = patience
         self.min_delta = min_delta #We want the loss to be 0.99 from the previous epoch.
         self.counter = 0
         self.min_validation_loss = np.inf
+        self.is_best_model = False
+        self.early_stop = False
 
-    def early_stop(self, validation_loss):
-        #print(f"Minimum validation loss: {self.min_validation_loss:.5f}")
-        #print(f"Current validation loss: {validation_loss:.5f}")
+    def step(self, loss:float):
+        """Stepping the EarlyStopper with one more loss, checks whether should stop.
 
-        if validation_loss < self.min_validation_loss:
-            self.min_validation_loss = validation_loss
-            self.counter = 0
+        Args:
+            loss (float): The loss to be monitored
+        """
+
+        if loss < self.min_validation_loss * self.min_delta:
+            #New loss was found!
+            self.counter = 0 #Reset the counter
+            self.min_validation_loss = loss
+            self.is_best_model = True
+        
+        else: #Not enough imporvement
             
-        elif validation_loss > (self.min_validation_loss * self.min_delta):
-            print(f"strike {self.counter}! didn't increase by mindelta.")
-            self.counter += 1
-            if self.counter >= self.patience:
-                return True
-        return False
+            self.counter+=1
+            print(f"Strike {self.counter} / {self.patience}")
+            self.is_best_model = loss < self.min_validation_loss #yet might be new best.
+
+            if self.counter>=self.patience:
+                self.early_stop = True
 
 class LRScheduler:
     def __init__(self, init_lr=1.0e-4, lr_decay_epoch=10, 
@@ -90,6 +108,9 @@ class SingleGPUTrainer:
         self.save_every = save_every
         self.num_classes = num_classes
         self.epochs_trained = 0
+        
+        
+        self.CHECKPOINT_PATH = Path("models", f"{uuid.uuid4().hex}.pt")
 
     def forward(self, X):
         return F.softmax(self.model(X), dim = 1) #Normalized        
@@ -97,7 +118,7 @@ class SingleGPUTrainer:
     def prepare_input(self, X, y):
         return X.to(self.gpu_id), y.to(self.gpu_id)
 
-    def _train_epoch(self):
+    def _train_epoch(self) -> dict[str, Any]:
         
         self.model.train()
 
@@ -147,7 +168,7 @@ class SingleGPUTrainer:
         return results
         
     @torch.no_grad()
-    def _eval_epoch(self, phase):
+    def _eval_epoch(self, phase) -> dict[str, Any]:
 
         self.model.eval()
 
@@ -185,23 +206,43 @@ class SingleGPUTrainer:
 
         return results
 
-    def train_until_converge(self, n_epochs, patience, min_delta):
+    def train_until_converge(self, n_epochs, patience, min_delta) -> None:
 
         early_stopper = EarlyStopper(
             patience=patience, 
             min_delta=min_delta)
 
-        for i in range(n_epochs):
+        for _ in range(n_epochs):
             train_results = self._train_epoch()
             val_results = self._eval_epoch("val")
 
             mlflow.log_metrics(get_only_metrics(val_results), step = self.epochs_trained)
             mlflow.log_metrics(get_only_metrics(train_results), step = self.epochs_trained)
 
-            if early_stopper.early_stop(val_results["val_loss"]):
-                print("model converged!")
+            early_stopper.step(val_results["val_loss"]) #One more step for validation loss, check whether should stop.
+
+            if early_stopper.is_best_model:
+                #This is the best model so far, let's save it.
+                
+                hash_indicator = list(self.model.parameters())[0].detach().cpu().mean()
+                print(f"Saving model... {hash_indicator}") #Just to make sure everything is working.
+                best_epoch_idx = self.epochs_trained
+                self._save_checkpoint()
+
+            if early_stopper.early_stop:
+                print(f"Model Converged!")
                 break #Model converged.
-            
+        
+        self.model.load_state_dict(torch.load(self.CHECKPOINT_PATH))
+        self.epochs_trained = best_epoch_idx
+        hash_indicator = list(self.model.parameters())[0].detach().cpu().mean()
+
+        print(f"Done training, hash indicator now: {hash_indicator}, at epoch {best_epoch_idx}")
+    
+    def _save_checkpoint(self):
+        ckp = self.model.state_dict()
+        torch.save(ckp, self.CHECKPOINT_PATH)
+
     
     def set_loss_fn(self, loss_fn:nn.Module):
         self.loss_fn = loss_fn
