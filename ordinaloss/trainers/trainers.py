@@ -20,7 +20,7 @@ import pandas as pd
 from torch import nn
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
-from ordinaloss.utils.metric_utils import RunningMetric, BinCounter
+from ordinaloss.utils.metric_utils import RunningMetric, BinCounter, StatsCollector
 from ordinaloss.utils.metric_utils import accuracy_pytorch, mae_pytorch
 
 
@@ -34,8 +34,8 @@ class EarlyStopper:
         self.min_validation_loss = np.inf
 
     def early_stop(self, validation_loss):
-        print(self.min_validation_loss)
-        print(validation_loss)
+        print(f"Minimum validation loss: {self.min_validation_loss:.5f}")
+        print(f"Current validation loss: {validation_loss:.5f}")
 
         if validation_loss < self.min_validation_loss:
             self.min_validation_loss = validation_loss
@@ -78,6 +78,7 @@ class SingleGPUTrainer:
         optimizer: torch.optim.Optimizer, 
         gpu_id: int,
         save_every: int,
+        num_classes:int
         ):
 
         self.gpu_id = gpu_id
@@ -86,6 +87,7 @@ class SingleGPUTrainer:
 
         self.optimizer = optimizer
         self.save_every = save_every
+        self.num_classes = num_classes
 
     def forward(self, X):
         return F.softmax(self.model(X), dim = 1) #Normalized        
@@ -100,7 +102,6 @@ class SingleGPUTrainer:
         accuracy_metric = RunningMetric()
         loss_metric = RunningMetric()
         mae_metric = RunningMetric()
-        bin_counter = BinCounter(n_classes = 5, device=self.gpu_id)
 
         loader = tqdm(self.loaders["train"], total = len(self.loaders["train"]), desc= f"Training, epoch {epoch}")
 
@@ -124,7 +125,6 @@ class SingleGPUTrainer:
             mae_metric.update(mae, batch_size)
             accuracy_metric.update(accuracy, batch_size)
             loss_metric.update(loss.item(), batch_size)
-            bin_counter.update(y_pred.argmax(axis=1)) 
             
             loader.set_postfix(
                 loss = loss_metric.average, 
@@ -138,7 +138,7 @@ class SingleGPUTrainer:
 
         accuracy_metric = RunningMetric()
         loss_metric = RunningMetric()
-        bin_counter = BinCounter(n_classes = 5, device=self.gpu_id)
+        collector = StatsCollector()
 
         loader = self.loaders[phase]
 
@@ -151,12 +151,15 @@ class SingleGPUTrainer:
 
             accuracy_metric.update(accuracy, batch_size)
             loss_metric.update(loss.item(), batch_size)
-            bin_counter.update(y_pred.argmax(axis=1)) 
+            collector.update(y_pred, y)
+        
+        distribution = np.bincount(collector.collect_y_pred().argmax(axis=1), minlength=self.num_classes)
+        distribution = distribution/distribution.sum()
 
         return {
-            "bin_counter": bin_counter.average, 
-            "loss": loss_metric.average, 
-            "accuracy":accuracy_metric.average
+            "distribution": distribution, #numpy array
+            "loss": loss_metric.average, #single value
+            "accuracy":accuracy_metric.average #single value
             }
 
     def train_until_converge(self, n_epochs, patience, min_delta):

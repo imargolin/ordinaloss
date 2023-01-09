@@ -1,5 +1,6 @@
 import torch
 from dataclasses import dataclass, field
+import numpy as np
 
 print(f"loaded {__name__}!!")
 
@@ -31,6 +32,23 @@ class BinCounter:
         self.running_total = self.running_total + counts 
         self.num_updates += y_pred.shape[0] #batch_size
         self.average = self.running_total / self.num_updates
+
+class StatsCollector:
+    def __init__(self):
+        self.y_pred = []
+        self.y_true = []
+    
+    @torch.no_grad()
+    def update(self, y_pred, y_true):
+        self.y_pred.append(y_pred.cpu().numpy())
+        self.y_true.append(y_true.cpu().numpy())
+
+    def collect_y_pred(self) -> np.array:
+        return np.concatenate(self.y_pred)
+        
+    def collect_y_true(self)-> np.array:
+        return np.concatenate(self.y_true, axis=-1)
+
 
 @torch.no_grad()
 def accuracy_pytorch(y_pred, y):

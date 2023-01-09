@@ -162,7 +162,6 @@ def create_datasets(data_dir, phases = ['train', 'val', 'test', 'auto_test']):
     dsets = {x: ImageFolder(os.path.join(data_dir, x), data_transform[x]) for x in phases}
     return dsets
 
-
 def load_multi_gpu(dsets, batch_size):
     out = {}
     for phase, dataset in dsets.items():
@@ -175,7 +174,6 @@ def load_multi_gpu(dsets, batch_size):
             sampler=DistributedSampler(dataset)
             )
     return out
-
 
 def load_single_gpu(dsets, batch_size):
     out = {}
