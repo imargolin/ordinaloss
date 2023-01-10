@@ -72,9 +72,13 @@ def train_single_gpu(
 
     mlflow.end_run()
     mlflow.log_params(vars(args))
+    
     optimizer = SGD(model.parameters(), lr=lr, weight_decay=weight_decay)
+
     loaders = load_single_gpu(dsets, batch_size)
-    cost_matrix = create_ordinal_cost_matrix(num_classes, cost_distance=cost_distance, diagonal_value=diagonal_value)
+
+    cost_matrix = create_ordinal_cost_matrix(num_classes, cost_distance=cost_distance, diagonal_value=diagonal_value, normalize=False)
+
     trainer = SingleGPUTrainer(
         model, 
         loaders=loaders,
@@ -84,7 +88,7 @@ def train_single_gpu(
         num_classes=num_classes
         )
 
-    constraints = torch.tensor([1.00, 1.00, 1.00, 0.05, 1.00], device= device_id)
+    constraints = torch.tensor([1.00, 1.00, 1.00, 0.03, 1.00], device= device_id)
     current_lambdas = torch.tensor([0.00, 0.00, 0.00, 0.00, 0.00], device= device_id)
 
     while True:
@@ -150,9 +154,9 @@ if __name__ == "__main__":
     parser.add_argument('--n_procs', default=1, type=int, help="Total number of processes (GPUs used)")
     parser.add_argument('--device_id', default=0, type=int, help="The device, used only if n_procs is 1")
     parser.add_argument('--meta_lr', default=10, type=float, help="The meta learning rate, how does the loss change")
-    parser.add_argument('--patience', default=3, type=int, help="The patience of the model for raise in loss")
+    parser.add_argument('--patience', default=8, type=int, help="The patience of the model for raise in loss")
     parser.add_argument('--cost_distance', default=3.0, type=float, help="The cost distance between 2 cosecutive orders")
-    parser.add_argument('--diagonal_value', default=20.0, type=float, help="The diagonal value of the loss function")
+    parser.add_argument('--diagonal_value', default=5.0, type=float, help="The diagonal value of the loss function")
     parser.add_argument('--min_delta', default=1.0, type=float, help="The minimum delta for early stopping")
     parser.add_argument('--lr', default=1.0e-3, type=float, help="ordindary learning rate")
     parser.add_argument('--weight_decay', default=5.0e-2, type=float, help="weight decay")

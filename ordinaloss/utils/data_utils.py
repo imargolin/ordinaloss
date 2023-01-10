@@ -182,7 +182,7 @@ def load_single_gpu(dsets, batch_size):
             dataset, 
             batch_size=batch_size,
             shuffle=(phase=="train"), 
-            pin_memory=False,
+            pin_memory=True, #Should we change it?
             num_workers = 4
             )
     return out
