@@ -27,6 +27,7 @@ from sklearn.metrics import accuracy_score, mean_absolute_error
 import os
 import uuid
 from pathlib import Path
+from torch.optim.lr_scheduler import StepLR
 
 print(f"loaded {__name__}")
 
@@ -75,6 +76,10 @@ class LRScheduler:
         self.lr_decay_epoch = lr_decay_epoch
         self.lr_decay_factor = lr_decay_factor
 
+    def step(self):
+        pass
+
+
     def __call__(self, optimizer, epoch):
         '''Decay learning rate by a factor every lr_decay_epoch epochs.'''
         lr = self.init_lr * (self.lr_decay_factor ** (epoch // self.lr_decay_epoch))
@@ -97,7 +102,8 @@ class SingleGPUTrainer:
         optimizer: torch.optim.Optimizer, 
         gpu_id: int,
         save_every: int,
-        num_classes:int
+        num_classes:int,
+        initial_lr:int
         ):
 
         self.gpu_id = gpu_id
@@ -110,6 +116,7 @@ class SingleGPUTrainer:
         self.epochs_trained = 0
         
         self.checkpoint_path = Path("models", f"{uuid.uuid4().hex}.pt")
+        self.initial_lr = initial_lr
 
     def forward(self, X):
         return F.softmax(self.model(X), dim = 1) #Normalized        
@@ -210,9 +217,12 @@ class SingleGPUTrainer:
         early_stopper = EarlyStopper(
             patience=patience, 
             min_delta=min_delta)
+        
+        scheduler = StepLR(self.optimizer, step_size=10, gamma=0.9)
 
         for _ in range(n_epochs):
             train_results = self._train_epoch()
+            scheduler.step()
             val_results = self._eval_epoch("val")
 
             mlflow.log_metrics(get_only_metrics(val_results), step = self.epochs_trained)

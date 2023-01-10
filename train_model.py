@@ -46,6 +46,7 @@ def train_single_gpu(
                     device_id:int, 
                     batch_size:int, 
                     lr:float, 
+                    momentum:float,
                     meta_lr:float, 
                     weight_decay:float, 
                     cost_distance:float, 
@@ -73,7 +74,7 @@ def train_single_gpu(
     mlflow.end_run()
     mlflow.log_params(vars(args))
     
-    optimizer = SGD(model.parameters(), lr=lr, weight_decay=weight_decay)
+    optimizer = SGD(model.parameters(), lr=lr, weight_decay=weight_decay, momentum=momentum)
 
     loaders = load_single_gpu(dsets, batch_size)
 
@@ -159,6 +160,7 @@ if __name__ == "__main__":
     parser.add_argument('--diagonal_value', default=5.0, type=float, help="The diagonal value of the loss function")
     parser.add_argument('--min_delta', default=1.0, type=float, help="The minimum delta for early stopping")
     parser.add_argument('--lr', default=1.0e-3, type=float, help="ordindary learning rate")
+    parser.add_argument('--momentum', default=0.9, type=float, help="SGD momentum")
     parser.add_argument('--weight_decay', default=5.0e-2, type=float, help="weight decay")
     parser.add_argument('--num_classes', default=5, type=int, help="Total number of classes")
     parser.add_argument('--save_every', default=3, type=int, help="How many epochs between each save")
