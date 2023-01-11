@@ -4,15 +4,15 @@ from torch import nn
 from ordinaloss.trainers.trainers import SingleGPUTrainer, MultiGPUTrainer
 from ordinaloss.utils.pretrained_models import classification_model_vgg, DummyModel
 from ordinaloss.utils.data_utils import create_datasets, load_multi_gpu, load_single_gpu
-from torch.optim import SGD
+from torch.optim import SGD, Adam, RMSprop
 from torch.distributed import destroy_process_group, init_process_group
-from ordinaloss.utils.basic_utils import satisfy_constraints, modify_lambdas
-
-from ordinaloss.utils.loss_utils import CSCELoss, PredictionLoss, CombinedLoss
+from ordinaloss.utils.basic_utils import satisfy_constraints, modify_lambdas,get_only_metrics
+from ordinaloss.utils.loss_utils import CSCELoss, PredictionLoss, CombinedLoss, SinimLoss
 import os
 from ordinaloss.utils.loss_utils import create_ordinal_cost_matrix
 import argparse
 import torch.multiprocessing as mp
+import numpy as np
 import sys
 import mlflow
 
@@ -58,6 +58,10 @@ def train_single_gpu(
                     save_every:int,
                     is_mock:bool,
                     model_architecture:str,
+                    optim:str,
+                    loss_type:str,
+                    sch_gamma:float,
+                    sch_step_size:int,
                     **kwargs
                     ):
 
@@ -74,11 +78,14 @@ def train_single_gpu(
     mlflow.end_run()
     mlflow.log_params(vars(args))
     
-    optimizer = SGD(model.parameters(), lr=lr, weight_decay=weight_decay, momentum=momentum)
+    if optim=="Adam":
+        optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    elif optim=="SGD":
+        optimizer = SGD(model.parameters(), lr=lr, weight_decay=weight_decay, momentum=momentum)
+    elif optim=="RMSProp":
+        optimizer = RMSprop(model.parameters(), lr=lr, weight_decay=weight_decay, momentum=momentum)
 
     loaders = load_single_gpu(dsets, batch_size)
-
-    cost_matrix = create_ordinal_cost_matrix(num_classes, cost_distance=cost_distance, diagonal_value=diagonal_value, normalize=False)
 
     trainer = SingleGPUTrainer(
         model, 
@@ -95,17 +102,37 @@ def train_single_gpu(
     while True:
         mlflow.log_metrics({f"lambda_{k}": v for k,v in enumerate(current_lambdas.tolist())}, step = trainer.epochs_trained)
 
-        csce_loss = CSCELoss(cost_matrix)
+        if loss_type=="Sinim":
+            cls_weights = np.array([[1, 3, 5, 7, 9],
+                                    [3, 1, 3, 5, 7],
+                                    [5, 3, 1, 3, 5],
+                                    [7, 5, 3, 1, 3],
+                                    [9, 7, 5, 3, 1]], dtype=np.float32)
+            cls_weights = torch.tensor(cls_weights)
+            data_loss = SinimLoss(cls_weights)
+            
+        elif loss_type =="CSCE":
+            cost_matrix = create_ordinal_cost_matrix(num_classes, cost_distance=cost_distance, diagonal_value=diagonal_value, normalize=False)
+            data_loss = CSCELoss(cost_matrix)
+
+        
         prediction_loss = PredictionLoss(lambdas = current_lambdas)
-        loss_fn = CombinedLoss(csce_loss, prediction_loss)
+        loss_fn = CombinedLoss(data_loss, prediction_loss)
 
         trainer.set_loss_fn(loss_fn)
         
-        trainer.train_until_converge(n_epochs=n_epochs, patience=patience, min_delta=min_delta)
+        trainer.train_until_converge(
+            n_epochs=n_epochs, 
+            patience=patience, 
+            min_delta=min_delta, 
+            sch_gamma=sch_gamma, 
+            sch_stepsize=sch_step_size)
+        
 
         test_results = trainer._eval_epoch("test")
 
         test_distribution = torch.tensor(test_results["test_distribution"], device=device_id)
+        print(f"Done training! info: {test_results}")
         
         #Logging the distribution of test
         mlflow.log_metrics({f"test_dist_{k}": v for k,v in enumerate(test_distribution.tolist())}, step = trainer.epochs_trained)
@@ -115,7 +142,11 @@ def train_single_gpu(
             current_lambdas = modify_lambdas(constraints, test_distribution, current_lambdas, meta_lr).to(device=device_id)
 
         else:
+            print("Done!")
+            mlflow.log_metrics(get_only_metrics(test_results), step = trainer.epochs_trained)
+            
             break
+            
 
 def train_multi_gpu(device:int, world_size:int, n_epochs:int, batch_size:int):
     ddp_setup(device, world_size=world_size)
@@ -150,12 +181,12 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description='simple distributed training job')
     
-    parser.add_argument('--n_epochs', default=80, type=int, help='Total maximum epochs to train the model')
+    parser.add_argument('--n_epochs', default=16, type=int, help='Total maximum epochs to train the model')
     parser.add_argument('--batch_size', default=32, type=int, help='Input batch size on each device')
     parser.add_argument('--n_procs', default=1, type=int, help="Total number of processes (GPUs used)")
     parser.add_argument('--device_id', default=0, type=int, help="The device, used only if n_procs is 1")
     parser.add_argument('--meta_lr', default=10, type=float, help="The meta learning rate, how does the loss change")
-    parser.add_argument('--patience', default=8, type=int, help="The patience of the model for raise in loss")
+    parser.add_argument('--patience', default=16, type=int, help="The patience of the model for raise in loss")
     parser.add_argument('--cost_distance', default=3.0, type=float, help="The cost distance between 2 cosecutive orders")
     parser.add_argument('--diagonal_value', default=5.0, type=float, help="The diagonal value of the loss function")
     parser.add_argument('--min_delta', default=1.0, type=float, help="The minimum delta for early stopping")
@@ -166,10 +197,14 @@ if __name__ == "__main__":
     parser.add_argument('--save_every', default=3, type=int, help="How many epochs between each save")
     parser.add_argument('--is_mock', default=0, type=int, help="Use 1 to dry run on random data")
     parser.add_argument('--model_architecture', default="vgg19", type=str, help="One of vgg19 or vgg16")
-
-
+    parser.add_argument('--optim', default="SGD", type=str, help="What is the optimizer")
+    parser.add_argument('--loss_type', default="CSCE", type=str, help="Can be one of CSCE or Sinim")
+    parser.add_argument('--sch_step_size', default=5, type=int, help="The scheduler step size")
+    parser.add_argument('--sch_gamma', default=0.9, type=float, help="The scheduler step size")
     
     args = parser.parse_args()
+
+    torch.manual_seed(0)
 
     if args.n_procs==-1 or args.n_procs>1:
         print(f"Training in a distributed mode, device id is {args.device_id}")
@@ -183,4 +218,3 @@ if __name__ == "__main__":
     else:
         print(f"Training on a single mode, device id is {args.device_id}")
         train_single_gpu(**vars(args))
-        print("DONE!")

@@ -21,7 +21,7 @@ from torch import nn
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
 from ordinaloss.utils.metric_utils import RunningMetric, BinCounter, StatsCollector
-from ordinaloss.utils.metric_utils import accuracy_pytorch, mae_pytorch
+from ordinaloss.utils.metric_utils import accuracy_pytorch, mae_pytorch, calc_cost_metric
 from ordinaloss.utils.basic_utils import get_only_metrics
 from sklearn.metrics import accuracy_score, mean_absolute_error
 import os
@@ -102,8 +102,7 @@ class SingleGPUTrainer:
         optimizer: torch.optim.Optimizer, 
         gpu_id: int,
         save_every: int,
-        num_classes:int,
-        initial_lr:int
+        num_classes:int
         ):
 
         self.gpu_id = gpu_id
@@ -116,7 +115,6 @@ class SingleGPUTrainer:
         self.epochs_trained = 0
         
         self.checkpoint_path = Path("models", f"{uuid.uuid4().hex}.pt")
-        self.initial_lr = initial_lr
 
     def forward(self, X):
         return F.softmax(self.model(X), dim = 1) #Normalized        
@@ -156,8 +154,10 @@ class SingleGPUTrainer:
         y_pred_all = collector.collect_y_pred().argmax(axis=1)
         y_true_all = collector.collect_y_true()
 
+        
         mae = mean_absolute_error(y_true_all, y_pred_all)
         accuracy = accuracy_score(y_true_all, y_pred_all)
+        cost = calc_cost_metric(y_true=y_true_all, y_pred=y_pred_all, n_classes=self.num_classes)
        
         distribution = np.bincount(y_pred_all, minlength=self.num_classes)
         distribution = distribution/distribution.sum()
@@ -168,7 +168,8 @@ class SingleGPUTrainer:
             "train_distribution": distribution, #numpy array
             "train_loss": loss_metric.average, #single value
             "train_accuracy":accuracy, #single value
-            "train_mae": mae
+            "train_mae": mae,
+            "train_cost": cost
             }
 
         return results
@@ -194,11 +195,12 @@ class SingleGPUTrainer:
         
         y_pred_all = collector.collect_y_pred().argmax(axis=1)
         y_true_all = collector.collect_y_true()
-
+        
         #Some metrics
         
         mae = mean_absolute_error(y_true_all, y_pred_all)
         accuracy = accuracy_score(y_true_all, y_pred_all)
+        cost = calc_cost_metric(y_true=y_true_all, y_pred=y_pred_all, n_classes=self.num_classes)
        
         distribution = np.bincount(y_pred_all, minlength=self.num_classes)
         distribution = distribution/distribution.sum()
@@ -207,18 +209,20 @@ class SingleGPUTrainer:
             f"{phase}_distribution": distribution, #numpy array
             f"{phase}_loss": loss_metric.average, #single value
             f"{phase}_accuracy":accuracy, #single value
-            f"{phase}_mae": mae #single value
+            f"{phase}_mae": mae, #single value
+            f"{phase}_cost": cost, #single value
+
             }
 
         return results
 
-    def train_until_converge(self, n_epochs, patience, min_delta) -> None:
+    def train_until_converge(self, n_epochs, patience, min_delta, sch_stepsize, sch_gamma) -> None:
 
         early_stopper = EarlyStopper(
             patience=patience, 
             min_delta=min_delta)
         
-        scheduler = StepLR(self.optimizer, step_size=10, gamma=0.9)
+        scheduler = StepLR(self.optimizer, step_size=sch_stepsize, gamma=sch_gamma, verbose=True)
 
         for _ in range(n_epochs):
             train_results = self._train_epoch()

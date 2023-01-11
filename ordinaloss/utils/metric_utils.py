@@ -1,8 +1,22 @@
 import torch
 from dataclasses import dataclass, field
 import numpy as np
+from sklearn.metrics import confusion_matrix
 
 print(f"loaded {__name__}")
+
+def calc_cost_metric(y_pred, y_true, n_classes=5):
+    """_summary_
+
+    Args:
+        y_pred (_type_): n numpy (1 dim, predictions after argmax)
+        y_test (_type_): n numpy (1 dim)
+    """
+
+    r = np.arange(0,n_classes)
+    cost_matrix = 2 * np.abs(r-r[:, None])+1
+    cm = confusion_matrix(y_pred=y_pred, y_true=y_true, labels = np.arange(0,n_classes))
+    return (cm * cost_matrix).sum()
 
 @dataclass
 class RunningMetric:

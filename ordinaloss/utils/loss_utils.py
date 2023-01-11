@@ -11,6 +11,7 @@ import torch.nn.functional as F
 from torch import nn
 
 print(f"loaded {__name__}")
+#device = "cuda:2" if torch.cuda.is_available() else "cpu"
 
 def create_ordinal_cost_matrix(num_classes, cost_distance, 
                                diagonal_value, normalize = True):
@@ -66,7 +67,7 @@ class SinimLoss(nn.Module):
         for i in range(self.n_classes):
             self.ordinal_matrix[i,i] = 0
 
-        self.ordinal_matrix = self.ordinal_matrix.cuda()
+        self.ordinal_matrix = self.ordinal_matrix
 
     def forward(self, y_pred, y_true):
         '''
@@ -119,6 +120,9 @@ class SinimLossOld(nn.Module):
         self.a = 1
 
     def forward(self, outputs, labels):
+        """
+        The outputs should be softmax-normalized!
+        """
         #softmax_op = torch.nn.Softmax(1)
         prob_pred = outputs
 
@@ -135,10 +139,12 @@ class SinimLossOld(nn.Module):
 
         class_hot = np.zeros([batch_num, class_num], dtype=np.float32)
         labels_np = labels.data.cpu().numpy()
+        print(labels_np)
         for ind in range(batch_num):
+            print(ind)
             class_hot[ind, :] = cls_weights[labels_np[ind], :]
         class_hot = torch.from_numpy(class_hot)
-        class_hot = torch.autograd.Variable(class_hot).cuda()
+        class_hot = torch.autograd.Variable(class_hot)
         loss = torch.sum((prob_pred * class_hot) ** 2) / batch_num
 
         return loss
