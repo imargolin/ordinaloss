@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from ordinaloss.trainers.trainers import SingleGPUTrainer, SingleGPUTrainerMatan
 from ordinaloss.utils.pretrained_models import classification_model_vgg, DummyModel
-from ordinaloss.utils.data_utils import create_datasets, load_multi_gpu, load_single_gpu
+from ordinaloss.utils.data_utils import create_dsets_melanoma, load_multi_gpu, load_single_gpu
 from torch.optim import SGD, Adam, RMSprop
 from torch.distributed import destroy_process_group, init_process_group
 from ordinaloss.utils.basic_utils import satisfy_constraints, modify_lambdas,get_only_metrics
@@ -16,9 +16,10 @@ import sys
 import mlflow
 
 from ordinaloss.utils.basic_utils import create_mock_dsets, create_mock_model
-from ordinaloss.utils.data_utils import data_load
 
 from  mlflow.tracking import MlflowClient
+
+EXPERIMENT_NAME = "Maruloss"
 
 def run_experiment(
     n_epochs:int,
@@ -41,10 +42,16 @@ def run_experiment(
     ):
 
     mlflow.end_run()
-    mlflow.create_experiment("Maruloss")
-    mlflow.set_experiment("Maruloss")
+
+    
+    existing_exp = mlflow.get_experiment_by_name(EXPERIMENT_NAME)
+    if not existing_exp:
+        mlflow.create_experiment(EXPERIMENT_NAME)
+    mlflow.set_experiment(EXPERIMENT_NAME)
 
     with mlflow.start_run():
+
+        #Logging params
         mlflow.log_params(args)
 
         cost_matrix_mapper = {
@@ -55,17 +62,19 @@ def run_experiment(
         
         cost_matrix = cost_matrix_mapper[research_type]
 
+        #Setting the datasets.
         if is_mock:
             print("====RUNNING MOCK VERSION=====")
             model = create_mock_model(num_classes=2)
             dsets = create_mock_dsets(num_classes=2)
-            loaders = load_single_gpu(dsets, batch_size)
-
+            
         else:
             model = classification_model_vgg(model_architecture, num_classes=2)
-            #dsets = create_datasets(data_path)
-            loaders = data_load(data_path, batch_size, db="Melanoma")
+            dsets = create_dsets_melanoma(data_path)
 
+        loaders = load_single_gpu(dsets, batch_size)
+
+        #Setting the optimizer
         if optim=="Adam":
             optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
         elif optim=="SGD":
@@ -73,6 +82,8 @@ def run_experiment(
         elif optim=="RMSProp":
             optimizer = RMSprop(model.parameters(), lr=lr, weight_decay=weight_decay, momentum=momentum)
 
+
+        #Setting the trainer
         trainer = SingleGPUTrainerMatan(
             model=model, 
             loaders=loaders,
@@ -82,8 +93,11 @@ def run_experiment(
             save_every=2
             )
 
+        #Setting the loss
         loss_fn = CostSensitiveLoss(weight= 10000, cost_matrix = cost_matrix)
         trainer.set_loss_fn(loss_fn)
+
+        #Start training
         trainer.train_until_converge(
             n_epochs=n_epochs, 
             patience=patience, 

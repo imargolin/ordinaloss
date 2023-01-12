@@ -3,7 +3,7 @@ from torch import nn
 #from ordinaloss_distributed.engine.trainer import Trainer
 from ordinaloss.trainers.trainers import SingleGPUTrainer, MultiGPUTrainer
 from ordinaloss.utils.pretrained_models import classification_model_vgg, DummyModel
-from ordinaloss.utils.data_utils import create_datasets, load_multi_gpu, load_single_gpu
+from ordinaloss.utils.data_utils import create_dsets_knee, load_multi_gpu, load_single_gpu
 from ordinaloss.utils.basic_utils import create_mock_dsets, create_mock_model
 from torch.optim import SGD, Adam, RMSprop
 from torch.distributed import destroy_process_group, init_process_group
@@ -54,7 +54,7 @@ def train_single_gpu(
 
     else:
         model = classification_model_vgg(model_architecture, num_classes=num_classes)
-        dsets = create_datasets("../datasets/kneeKL224/")
+        dsets = create_dsets_knee("../datasets/kneeKL224/")
 
     mlflow.end_run()
     mlflow.log_params(args)
