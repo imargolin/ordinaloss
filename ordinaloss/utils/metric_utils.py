@@ -1,5 +1,6 @@
 import torch
 from dataclasses import dataclass, field
+import numpy as np
 
 print(f"loaded {__name__}!!")
 
@@ -31,6 +32,27 @@ class BinCounter:
         self.running_total = self.running_total + counts 
         self.num_updates += y_pred.shape[0] #batch_size
         self.average = self.running_total / self.num_updates
+        
+class PredictionsCollector:
+    def __init__(self, n_classes, device):
+        self.device = device
+        self.predictions_collector = []
+        self.actual_collector = []
+        
+    @torch.no_grad()
+    def update(self, y_pred:torch.Tensor, y_true: torch.Tensor):
+        '''
+        y_pred is NxC (even if C is 2)
+        y_true is N (actual classes [1,2,3,0,2...])
+        
+        '''
+        self.predictions_collector.append(y_pred.cpu().numpy())
+        self.actual_collector.append(y_true.cpu().numpy())
+        
+    def finalize(self):
+        self.predictions_collector = np.concatenate(self.predictions_collector) #should be numpy
+        self.actual_collector = np.concatenate(self.actual_collector)    
+    
 
 @torch.no_grad()
 def accuracy_pytorch(y_pred, y):

@@ -1,4 +1,4 @@
-from ordinaloss.utils.metric_utils import RunningMetric, BinCounter
+from ordinaloss.utils.metric_utils import RunningMetric, BinCounter, PredictionsCollector
 from ordinaloss.utils.metric_utils import accuracy_pytorch, mae_pytorch
 import torch.nn.functional as F
 from tqdm import tqdm
@@ -6,6 +6,9 @@ import torch
 import mlflow
 import numpy as np
 import copy
+import pandas as pd
+from sklearn import metrics
+
 
 print(f"loaded {__name__}")
 
@@ -168,9 +171,12 @@ class OrdinalEngine:
         self.model.eval()
         loader = self.loaders[phase]
 
+        recall_score , precision_score = 0,0 
         accuracy_metric = RunningMetric()
         loss_metric = RunningMetric()
         bin_counter = BinCounter(n_classes = self.n_classes, device=self.device)
+        pc = PredictionsCollector(self.n_classes, device=self.device)
+        
 
         iterator = tqdm(loader, total = len(loader), desc= f"Evaluating...")
         for X, y in iterator:
@@ -184,6 +190,7 @@ class OrdinalEngine:
             else:
                 loss = self._loss_fn(y_pred, y)
                 
+            pc.update(y_pred, y)
             accuracy = accuracy_pytorch(y_pred, y)
 
             accuracy_metric.update(accuracy, batch_size)
@@ -192,11 +199,28 @@ class OrdinalEngine:
 
             iterator.set_postfix(loss = loss_metric.average, 
                                  accuracy = accuracy_metric.average) 
+            
+        pc.finalize()
+        # print(pd.Series(pc.predictions_collector.argmax(axis=1)).value_counts())
+        if self.n_classes==2:
+            y_pred_call = pc.predictions_collector.argmax(axis=1)
+            recall_score = metrics.recall_score(pc.actual_collector,y_pred_call)
+            precision_score = metrics.precision_score(pc.actual_collector,y_pred_call)
+            f1_score = metrics.f1_score(pc.actual_collector,y_pred_call)
+            roc_auc_score = metrics.roc_auc_score(pc.actual_collector,pc.predictions_collector[:,1])
+
 
         return {
             'bin_counter' : bin_counter.average,
             "loss": loss_metric.average,
-            "accuracy": accuracy_metric.average
+            "accuracy": accuracy_metric.average,
+            "recall_score": recall_score,
+            "precision_score": precision_score,
+            'f1_score' : f1_score,
+            'roc_auc_score' : roc_auc_score,
+            'y_pred' : pc.predictions_collector ,
+            'y_actual': pc.actual_collector ,
+            'score_dist' : pd.Series(pc.predictions_collector.argmax(axis=1)).value_counts()
             # "mae":cum_mae / cum_batch_size,
                 }
 
@@ -244,7 +268,8 @@ class OrdinalEngine:
             best_acc_train = 0
             best_acc_test = 0
             best_model = copy.deepcopy(self.model)
-            for _ in range(n_epochs):
+            best_epoch = 0
+            for epoch in range(n_epochs):
                 res = self._train_epoch()
                 if res['accuracy']> best_acc_train:
                     best_acc_train = res['accuracy']
@@ -254,5 +279,5 @@ class OrdinalEngine:
                     if res_test['accuracy']> best_acc_test:
                         best_acc_test = res_test['accuracy']
                         best_model = copy.deepcopy(self.model)
-                        
-            return best_acc_train,best_acc_test,best_model
+                        best_epoch = epoch
+            return best_acc_train,best_acc_test,best_model,best_epoch
