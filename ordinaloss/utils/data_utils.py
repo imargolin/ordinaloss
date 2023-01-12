@@ -2,8 +2,6 @@
 
 import os, sys, pdb
 import torch.utils.data as data
-from torch.utils.data import DataLoader, Dataset
-from torch.utils.data.distributed import DistributedSampler
 
 from PIL import Image
 import os.path
@@ -70,7 +68,7 @@ def default_loader(path):
     else:
         return pil_loader(path)
 
-class ImageFolder(Dataset):
+class ImageFolder(data.Dataset):
     """A generic data loader where the images are arranged in this way: ::
         root/dog/xxx.png
         root/dog/xxy.png
@@ -106,7 +104,8 @@ class ImageFolder(Dataset):
         self.transform = transform
         self.target_transform = target_transform
         self.loader = loader
-
+        self_class1 = 0
+        
     def __getitem__(self, index):
         """
         Args:
@@ -128,8 +127,7 @@ class ImageFolder(Dataset):
     def __len__(self):
         return len(self.imgs)
 
-
-def create_datasets(data_dir, phases = ['train', 'val', 'test', 'auto_test']):
+def data_load(data_dir, batch_size, db ='knee', phases= ['train', 'val', 'test', 'auto_test']):
     pixel_mean, pixel_std = 0.66133188,  0.21229856
     data_transform = {
         'train': transforms.Compose([
@@ -196,9 +194,11 @@ def data_load2(data_dir, batch_size):
         'train': transforms.Compose([
             transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.3),
             transforms.ToTensor(),
-            transforms.Normalize([pixel_mean]*3, [pixel_std]*3)
-        ]),
-        'val': transforms.Compose([
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+        ])
+,
+            'val': transforms.Compose([
+            transforms.Resize((50, 50)),
             transforms.ToTensor(),
             transforms.Normalize([pixel_mean]*3, [pixel_std]*3)
         ]),
@@ -218,7 +218,7 @@ def data_load2(data_dir, batch_size):
             transforms.ToTensor(),
             transforms.Normalize([pixel_mean]*3, [pixel_std]*3)
         ])
-    }
+        }
 
     dsets = {x: ImageFolder(os.path.join(data_dir, x), data_transform[x]) for x in phases}
     dset_loaders = {x: torch.utils.data.DataLoader(dsets[x], batch_size=batch_size,
