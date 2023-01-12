@@ -8,11 +8,29 @@ Created on Sun Jul 10 11:38:52 2022
 import numpy as np
 import torch
 import numbers
+from torch import nn
+from torch.utils.data import TensorDataset, DataLoader
+
+def create_mock_model(num_classes=5, num_features=2000):
+    return nn.Linear(num_features, num_classes)
+
+def create_mock_dsets(
+    num_classes=5, 
+    num_features=2000, 
+    num_samples=500, 
+    phases=["train", "test", "val", "auto_test"]
+    ):
+
+    out={}
+    for phase in phases:
+        dset = TensorDataset(torch.rand(num_samples, num_features), torch.randint(num_classes, size=(num_samples,)))
+        out[phase] = dset
+
+    return out
 
 
 def get_only_metrics(my_dict:dict):
     return {k:v for k,v in my_dict.items() if isinstance(v, numbers.Number)}
-
 
 def satisfy_constraints(test_dist:torch.Tensor, constraints: torch.Tensor) -> bool:
     """Returns an answer to the question whehter constraints has been satisfied.

@@ -263,8 +263,8 @@ class SingleGPUTrainerMatan:
         optimizer: torch.optim.Optimizer, 
         gpu_id: int,
         save_every: int,
-        num_classes:int,
-        grad_norm
+        num_classes: int,
+        grad_norm:float = 15.0
         ):
 
         self.gpu_id = gpu_id

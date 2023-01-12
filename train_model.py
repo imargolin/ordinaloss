@@ -4,6 +4,7 @@ from torch import nn
 from ordinaloss.trainers.trainers import SingleGPUTrainer, MultiGPUTrainer
 from ordinaloss.utils.pretrained_models import classification_model_vgg, DummyModel
 from ordinaloss.utils.data_utils import create_datasets, load_multi_gpu, load_single_gpu
+from ordinaloss.utils.basic_utils import create_mock_dsets, create_mock_model
 from torch.optim import SGD, Adam, RMSprop
 from torch.distributed import destroy_process_group, init_process_group
 from ordinaloss.utils.basic_utils import satisfy_constraints, modify_lambdas,get_only_metrics
@@ -15,26 +16,6 @@ import torch.multiprocessing as mp
 import numpy as np
 import sys
 import mlflow
-
-
-from torch.utils.data import TensorDataset, DataLoader
-
-def create_mock_model(num_classes=5, num_features=2000):
-    return nn.Linear(num_features, num_classes)
-
-def create_mock_dsets(
-    num_classes=5, 
-    num_features=2000, 
-    num_samples=500, 
-    phases=["train", "test", "val", "auto_test"]
-    ):
-
-    out={}
-    for phase in phases:
-        dset = TensorDataset(torch.rand(num_samples, num_features), torch.randint(num_classes, size=(num_samples,)))
-        out[phase] = dset
-
-    return out
 
 def ddp_setup(rank, world_size):
     os.environ["MASTER_ADDR"] = "localhost"
@@ -76,7 +57,7 @@ def train_single_gpu(
         dsets = create_datasets("../datasets/kneeKL224/")
 
     mlflow.end_run()
-    mlflow.log_params(vars(args))
+    mlflow.log_params(args)
     
     if optim=="Adam":
         optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
@@ -127,7 +108,6 @@ def train_single_gpu(
             min_delta=min_delta, 
             sch_gamma=sch_gamma, 
             sch_stepsize=sch_step_size)
-        
 
         test_results = trainer._eval_epoch("test")
 
@@ -202,7 +182,7 @@ if __name__ == "__main__":
     parser.add_argument('--sch_step_size', default=5, type=int, help="After how many epochs do we change lr?")
     parser.add_argument('--sch_gamma', default=0.9, type=float, help="What is the gamma to change it?")
     
-    args = parser.parse_args()
+    args = vars(parser.parse_args()) #transform args to dictionary.
 
     torch.manual_seed(0)
 
@@ -217,4 +197,4 @@ if __name__ == "__main__":
 
     else:
         print(f"Training on a single mode, device id is {args.device_id}")
-        train_single_gpu(**vars(args))
+        train_single_gpu(**args)
