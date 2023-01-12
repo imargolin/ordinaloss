@@ -213,3 +213,48 @@ class CombinedLoss(nn.Module):
     def to(self, device):
         self.l1.to(device)
         self.l2.to(device)
+
+class CostSensitiveLoss(nn.Module):
+    def __init__(self, 
+                weight: int = 100, 
+                cost_matrix: np.ndarray = np.array([[], []]), 
+                reduction = "mean"
+                ):
+        
+        super().__init__()
+        self.cost_matrix = cost_matrix
+        self.TP_weight = self.cost_matrix[1,1]
+        self.TN_weight = self.cost_matrix[0,0]
+        self.FP_weight = self.cost_matrix[0,1]
+        self.FN_weight = self.cost_matrix[1,0]
+        self.weight = weight
+        self.reduction = reduction
+        
+    def forward(self, y_pred, y_true):
+        '''
+        y_pred is (N,C)
+        '''
+        assert y_pred.shape[1] == 2, "This loss function works only with 2 categories"
+
+        y_pred = y_pred[:, 1] 
+
+        TP = -1*(0+y_true)*(torch.log(1+((0+y_pred)-1)*(1-torch.tanh(self.weight*(torch.max(y_pred, 1-y_pred)-y_pred))))) #vanish if y_true is 0
+        FP = -1*(1-y_true)*(torch.log(1+((1-y_pred)-1)*(1-torch.tanh(self.weight*(torch.max(y_pred, 1-y_pred)-y_pred))))) #vanish if y_true is 1
+        TN = -1*(1-y_true)*(torch.log(1+((1-y_pred)-1)*(0+torch.tanh(self.weight*(torch.max(y_pred, 1-y_pred)-y_pred))))) #vanish if y_true is 1
+        FN = -1*(0+y_true)*(torch.log(1+((0+y_pred)-1)*(0+torch.tanh(self.weight*(torch.max(y_pred, 1-y_pred)-y_pred))))) #vanish if y_true is 0
+
+        # print(f"TP:  {TP*self.TP_weight}")
+        # print(f"FP:  {FP*self.FP_weight}")
+        # print(f"TN:  {TN*self.TN_weight}")
+        # print(f"FN:  {FN*self.FN_weight}")
+
+        out = (TP*self.TP_weight+FP*self.FP_weight+TN*self.TN_weight+FN*self.FN_weight)
+        
+        if not self.reduction:
+            return out
+        
+        if self.reduction == "mean":
+            return out.mean()
+        
+        if self.reduction == "sum":
+            return out.sum()

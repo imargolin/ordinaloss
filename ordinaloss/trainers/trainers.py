@@ -255,6 +255,161 @@ class SingleGPUTrainer:
         self.loss_fn = loss_fn
         self.loss_fn.to(self.gpu_id)
 
+class SingleGPUTrainerMatan:
+    def __init__(
+        self, 
+        model: nn.Module, 
+        loaders: Dict[str, DataLoader],
+        optimizer: torch.optim.Optimizer, 
+        gpu_id: int,
+        save_every: int,
+        num_classes:int,
+        grad_norm
+        ):
+
+        self.gpu_id = gpu_id
+        self.model = model.to(self.gpu_id)
+        self.loaders = loaders
+
+        self.optimizer = optimizer
+        self.save_every = save_every
+        self.num_classes = num_classes
+        self.epochs_trained = 0
+        
+        self.checkpoint_path = Path("models", f"{uuid.uuid4().hex}.pt")
+        self.grad_norm = grad_norm
+
+    def forward(self, X):
+        return F.softmax(self.model(X), dim = 1) #Normalized        
+
+    def prepare_input(self, X, y):
+        return X.to(self.gpu_id), y.to(self.gpu_id)
+
+    def _train_epoch(self) -> dict[str, Any]:
+        
+        self.model.train()
+
+        loss_metric = RunningMetric()
+        collector = StatsCollector()
+
+        loader = tqdm(self.loaders["train"], total = len(self.loaders["train"]), desc= f"Training, epoch {self.epochs_trained}")
+
+        for X, y in loader:
+
+            #Batch iteration
+            X, y = self.prepare_input(X, y)
+            batch_size = y.shape[0]
+
+            self.optimizer.zero_grad()
+            y_pred = self.forward(X)
+
+            loss = self.loss_fn(y_pred, y)
+            loss.backward()
+
+            self.optimizer.step()
+
+            loss_metric.update(loss.item(), batch_size)
+            collector.update(y_pred, y)
+            
+            loader.set_postfix(
+                loss = loss_metric.average)
+        
+        self.epochs_trained +=1
+
+        y_pred_all = collector.collect_y_pred().argmax(axis=1)
+        y_true_all = collector.collect_y_true()
+
+        ones_ratio =  y_pred_all.mean()
+        accuracy = accuracy_score(y_true_all, y_pred_all)
+
+        results = {
+            "train_loss": loss_metric.average, #single value
+            "train_accuracy":accuracy, #single value
+            "train_ones_ratio":ones_ratio, #single value
+            }
+
+        return results
+        
+    @torch.no_grad()
+    def _eval_epoch(self, phase) -> dict[str, Any]:
+
+        self.model.eval()
+
+        loss_metric = RunningMetric()        
+        collector = StatsCollector()
+
+        loader = self.loaders[phase]
+
+        for X, y in loader:
+            X, y = self.prepare_input(X, y)
+            batch_size = y.shape[0]
+            y_pred = self.forward(X)
+            loss = self.loss_fn(y_pred, y)
+
+            loss_metric.update(loss.item(), batch_size)
+            collector.update(y_pred, y)
+        
+        y_pred_all = collector.collect_y_pred().argmax(axis=1) #Binary vector of 0 and 1s
+        y_true_all = collector.collect_y_true()
+        
+        #Some metrics
+        
+        ones_ratio =  y_pred_all.mean()
+        accuracy = accuracy_score(y_true_all, y_pred_all)
+
+        results = {
+            f"{phase}_loss": loss_metric.average, #single value
+            f"{phase}_accuracy":accuracy, #single value
+            f"{phase}_ones_ratio":ones_ratio, #single value
+            }
+
+        return results
+
+    def train_until_converge(
+        self, n_epochs:int, 
+        patience:int=3, min_delta:float = 1.0, 
+        sch_stepsize:int=5, sch_gamma:float=0.9) -> None:
+
+        early_stopper = EarlyStopper(
+            patience=patience, 
+            min_delta=min_delta)
+        
+        scheduler = StepLR(self.optimizer, step_size=sch_stepsize, gamma=sch_gamma, verbose=True)
+
+        for _ in range(n_epochs):
+            train_results = self._train_epoch()
+            scheduler.step()
+            val_results = self._eval_epoch(phase ="val")
+
+            mlflow.log_metrics(get_only_metrics(val_results), step = self.epochs_trained)
+            mlflow.log_metrics(get_only_metrics(train_results), step = self.epochs_trained)
+
+            early_stopper.step(val_results["val_loss"]) #One more step for validation loss, check whether should stop.
+
+            if early_stopper.is_best_model:
+                #This is the best model so far, let's save it.
+                
+                best_epoch_idx = self.epochs_trained
+                self._save_checkpoint()
+
+            if early_stopper.early_stop:
+                break #Model converged.
+
+        print(f"Model Converged! the best validation loss is {early_stopper.min_validation_loss}")
+        self.model.load_state_dict(torch.load(self.checkpoint_path))
+        self.epochs_trained = best_epoch_idx
+    
+    def _save_checkpoint(self):
+        ckp = self.model.state_dict()
+        torch.save(ckp, self.checkpoint_path)
+
+    def set_loss_fn(self, loss_fn:nn.Module):
+        self.loss_fn = loss_fn
+        self.loss_fn.to(self.gpu_id)
+        
+
+
+
 class MultiGPUTrainer:
     def __init__(
         self, 
