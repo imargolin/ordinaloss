@@ -199,8 +199,8 @@ if __name__ == "__main__":
     parser.add_argument('--model_architecture', default="vgg19", type=str, help="One of vgg19 or vgg16")
     parser.add_argument('--optim', default="SGD", type=str, help="What is the optimizer")
     parser.add_argument('--loss_type', default="CSCE", type=str, help="Can be one of CSCE or Sinim")
-    parser.add_argument('--sch_step_size', default=5, type=int, help="The scheduler step size")
-    parser.add_argument('--sch_gamma', default=0.9, type=float, help="The scheduler step size")
+    parser.add_argument('--sch_step_size', default=5, type=int, help="After how many epochs do we change lr?")
+    parser.add_argument('--sch_gamma', default=0.9, type=float, help="What is the gamma to change it?")
     
     args = parser.parse_args()
 
