@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 """
 Created on Sun Jul 10 11:38:37 2022
@@ -23,7 +24,7 @@ from torch.utils.data import DataLoader
 from ordinaloss.utils.metric_utils import RunningMetric, BinCounter, StatsCollector
 from ordinaloss.utils.metric_utils import accuracy_pytorch, mae_pytorch, calc_cost_metric
 from ordinaloss.utils.basic_utils import get_only_metrics
-from sklearn.metrics import accuracy_score, mean_absolute_error
+from sklearn.metrics import accuracy_score, mean_absolute_error,f1_score,precision_score,recall_score,roc_auc_score
 import os
 import uuid
 from pathlib import Path
@@ -321,11 +322,19 @@ class SingleGPUTrainerMatan:
 
         ones_ratio =  y_pred_all.mean()
         accuracy = accuracy_score(y_true_all, y_pred_all)
-
+        f1 = f1_score(y_true_all, y_pred_all)
+        precision = precision_score(y_true_all, y_pred_all)
+        recall = recall_score(y_true_all, y_pred_all)
+        roc_auc = roc_auc_score(y_true_all, y_pred_all)
+        
         results = {
             "train_loss": loss_metric.average, #single value
             "train_accuracy":accuracy, #single value
             "train_ones_ratio":ones_ratio, #single value
+            'train_f1_score' : f1,
+            'train_precision_score' : precision,
+            'train_recall_score' : recall,
+            'train_roc_auc_score' : roc_auc            
             }
 
         return results
@@ -356,13 +365,30 @@ class SingleGPUTrainerMatan:
         
         ones_ratio =  y_pred_all.mean()
         accuracy = accuracy_score(y_true_all, y_pred_all)
-
+        f1 = f1_score(y_true_all, y_pred_all)
+        precision = precision_score(y_true_all, y_pred_all)
+        recall = recall_score(y_true_all, y_pred_all)
+        roc_auc = roc_auc_score(y_true_all, y_pred_all)
+        
         results = {
             f"{phase}_loss": loss_metric.average, #single value
             f"{phase}_accuracy":accuracy, #single value
             f"{phase}_ones_ratio":ones_ratio, #single value
+            f"{phase}_f1_score":f1, #single value
+            f"{phase}_precision_score":precision, #single value
+            f"{phase}_recall_score":recall, #single value
+            f"{phase}_roc_auc_score":roc_auc, #single value
+            f"{phase}_y_pred": collector.collect_y_pred()[:,1], #single value
+            f"{phase}_y_true": y_true_all #single value
             }
-
+        
+        print(collector.collect_y_pred())
+        print(phase,'-----',type(collector.collect_y_pred()),collector.collect_y_pred().argmax(axis=1))
+        print('========')
+        print(y_pred_all)
+        print('======')
+        print(ones_ratio)
+        
         return results
 
     def train_until_converge(
@@ -398,6 +424,12 @@ class SingleGPUTrainerMatan:
         print(f"Model Converged! the best validation loss is {early_stopper.min_validation_loss}")
         self.model.load_state_dict(torch.load(self.checkpoint_path))
         self.epochs_trained = best_epoch_idx
+
+        #Test results:
+        test_results = self._eval_epoch(phase ="test")
+        mlflow.log_metrics(get_only_metrics(test_results), step = best_epoch_idx)
+        
+        return train_results,val_results,test_results
     
     def _save_checkpoint(self):
         ckp = self.model.state_dict()

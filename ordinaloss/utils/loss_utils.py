@@ -235,7 +235,7 @@ class CostSensitiveLoss(nn.Module):
         y_pred is (N,C)
         '''
         assert y_pred.shape[1] == 2, "This loss function works only with 2 categories"
-
+n nnn
         y_pred = y_pred[:, 1] 
 
         TP = -1*(0+y_true)*(torch.log(1+((0+y_pred)-1)*(1-torch.tanh(self.weight*(torch.max(y_pred, 1-y_pred)-y_pred))))) #vanish if y_true is 0

@@ -14,8 +14,9 @@ import torch.multiprocessing as mp
 import numpy as np
 import sys
 import mlflow
-
+import pandas as pd
 from ordinaloss.utils.basic_utils import create_mock_dsets, create_mock_model
+from pathlib import Path
 
 from  mlflow.tracking import MlflowClient
 
@@ -38,7 +39,8 @@ def run_experiment(
     sch_gamma:float,
     sch_step_size:int,
     weight_decay:float,
-    lr:float
+    lr:float,
+    run_id:int
     ):
 
     mlflow.end_run()
@@ -53,6 +55,7 @@ def run_experiment(
 
         #Logging params
         mlflow.log_params(args)
+        # mlflow.log_params({'TEST':1})
 
         cost_matrix_mapper = {
             "ce": np.array([[1,1],[1,1]]),
@@ -61,7 +64,8 @@ def run_experiment(
                         }
         
         cost_matrix = cost_matrix_mapper[research_type]
-
+        
+        print('cost_matrix',cost_matrix)
         #Setting the datasets.
         if is_mock:
             print("====RUNNING MOCK VERSION=====")
@@ -98,13 +102,47 @@ def run_experiment(
         trainer.set_loss_fn(loss_fn)
 
         #Start training
-        trainer.train_until_converge(
-            n_epochs=n_epochs, 
-            patience=patience, 
-            min_delta=min_delta, 
-            sch_gamma=sch_gamma, 
-            sch_stepsize=sch_step_size)
+        train_results,val_results,test_results = trainer.train_until_converge(
+                                                            n_epochs=n_epochs, 
+                                                            patience=patience, 
+                                                            min_delta=min_delta, 
+                                                            sch_gamma=sch_gamma, 
+                                                            sch_stepsize=sch_step_size)
+        
+        #Save results:
+        curr_exp_path = Path("results", str(run_id))
+        
+        if not os.path.exists(curr_exp_path):
+            os.makedirs(curr_exp_path)
+        
+        pd.DataFrame ({'test_y_pred' : test_results['test_y_pred'],
+                       'test_y_true': test_results['test_y_true'] }).to_csv(str(curr_exp_path)+f'/test_predict_{lamda}.csv',index=False)
+        
+        print('prediciton saved ')
 
+        train_results['phase'] = 'train'
+        val_results['phase'] = 'val'
+        test_results['phase'] = 'test'
+
+        train_results['train_lamda'] = lamda
+        val_results['val_lamda'] = lamda
+        test_results['test_lamda'] = lamda
+        
+        ds = [train_results, val_results,test_results]
+        d = {}
+        for k in train_results.keys():
+            for phas in ['test','val','test']:
+                if k =='phase':
+                    d['phase'] = tuple(d['phase'] for d in ds)
+
+                else:
+                    new_key = '_'+'_'.join(k.split('_')[1:])
+                    d[new_key] = tuple(d[d['phase']+new_key] for d in ds)
+            
+        pd.DataFrame(d).to_csv(str(curr_exp_path)+f'/metrics_{lamda}.csv',index=False)
+        print('metrics results saved')
+    
+  
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='simple distributed training job')
     
@@ -124,7 +162,8 @@ if __name__ == "__main__":
     parser.add_argument("--model_architecture", default="vgg19", type=str, help="One of vgg19 or vgg16")
     parser.add_argument("--lamda", default=0.5, type=float, help= "asdasd")
     parser.add_argument("--research_type", default="ce", type=str, help= "One of {ce, wce, csce}")
-    parser.add_argument('--patience', default=16, type=int, help="The patience of the model for raise in loss")
+    parser.add_argument('--patience', default=5, type=int, help="The patience of the model for raise in loss")
+    parser.add_argument('--run_id', default=1, type=int, help="The patience of the model for raise in loss")
 
     args = vars(parser.parse_args())
     run_experiment(**args)
