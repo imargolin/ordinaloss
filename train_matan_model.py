@@ -65,7 +65,6 @@ def run_experiment(
         
         cost_matrix = cost_matrix_mapper[research_type]
         
-        print('cost_matrix',cost_matrix)
         #Setting the datasets.
         if is_mock:
             print("====RUNNING MOCK VERSION=====")
@@ -101,7 +100,7 @@ def run_experiment(
         loss_fn = CostSensitiveLoss(weight= 10000, cost_matrix = cost_matrix)
         trainer.set_loss_fn(loss_fn)
 
-        #Start training
+        # Start training
         train_results,val_results,test_results = trainer.train_until_converge(
                                                             n_epochs=n_epochs, 
                                                             patience=patience, 
@@ -109,13 +108,24 @@ def run_experiment(
                                                             sch_gamma=sch_gamma, 
                                                             sch_stepsize=sch_step_size)
         
+        # trainer.train(
+        #                                                     n_epochs=n_epochs, 
+        #                                                     patience=patience, 
+        #                                                     min_delta=min_delta, 
+        #                                                     sch_gamma=sch_gamma, 
+        #                                                     sch_stepsize=sch_step_size)
+        
         #Save results:
         curr_exp_path = Path("results", str(run_id))
         
         if not os.path.exists(curr_exp_path):
             os.makedirs(curr_exp_path)
-        
-        pd.DataFrame ({'test_y_pred' : test_results['test_y_pred'],
+            
+        if research_type !='csce':
+            pd.DataFrame ({'test_y_pred' : test_results['test_y_pred'],
+                       'test_y_true': test_results['test_y_true'] }).to_csv(str(curr_exp_path)+f'/test_predict_{research_type}.csv',index=False)
+        else:
+            pd.DataFrame ({'test_y_pred' : test_results['test_y_pred'],
                        'test_y_true': test_results['test_y_true'] }).to_csv(str(curr_exp_path)+f'/test_predict_{lamda}.csv',index=False)
         
         print('prediciton saved ')
@@ -138,8 +148,12 @@ def run_experiment(
                 else:
                     new_key = '_'+'_'.join(k.split('_')[1:])
                     d[new_key] = tuple(d[d['phase']+new_key] for d in ds)
-            
-        pd.DataFrame(d).to_csv(str(curr_exp_path)+f'/metrics_{lamda}.csv',index=False)
+                    
+        if research_type !='csce':
+            pd.DataFrame(d).to_csv(str(curr_exp_path)+f'/metrics_{research_type}.csv',index=False)
+        else:
+            pd.DataFrame(d).to_csv(str(curr_exp_path)+f'/metrics_{lamda}.csv',index=False)
+
         print('metrics results saved')
     
   

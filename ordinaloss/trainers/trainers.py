@@ -307,6 +307,8 @@ class SingleGPUTrainerMatan:
             loss = self.loss_fn(y_pred, y)
             loss.backward()
 
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 6)
+
             self.optimizer.step()
 
             loss_metric.update(loss.item(), batch_size)
@@ -326,7 +328,7 @@ class SingleGPUTrainerMatan:
         precision = precision_score(y_true_all, y_pred_all)
         recall = recall_score(y_true_all, y_pred_all)
         roc_auc = roc_auc_score(y_true_all, y_pred_all)
-        
+
         results = {
             "train_loss": loss_metric.average, #single value
             "train_accuracy":accuracy, #single value
@@ -380,15 +382,7 @@ class SingleGPUTrainerMatan:
             f"{phase}_roc_auc_score":roc_auc, #single value
             f"{phase}_y_pred": collector.collect_y_pred()[:,1], #single value
             f"{phase}_y_true": y_true_all #single value
-            }
-        
-        print(collector.collect_y_pred())
-        print(phase,'-----',type(collector.collect_y_pred()),collector.collect_y_pred().argmax(axis=1))
-        print('========')
-        print(y_pred_all)
-        print('======')
-        print(ones_ratio)
-        
+            }       
         return results
 
     def train_until_converge(
@@ -439,8 +433,28 @@ class SingleGPUTrainerMatan:
         self.loss_fn = loss_fn
         self.loss_fn.to(self.gpu_id)
         
-
-
+    def train(
+       self, n_epochs:int, 
+        patience:int=3, min_delta:float = 1.0, 
+        sch_stepsize:int=5, sch_gamma:float=0.9) -> None:
+        
+        best_acc_train = 0
+        best_acc_test = 0
+        best_model = 0
+        best_epoch = 0
+        for epoch in range(n_epochs):
+            res = self._train_epoch()
+            if res['train_accuracy']> best_acc_train:
+                best_acc_train = res['train_accuracy']
+                
+            # if test_loader:
+            #     print('here')
+            #     res_test = self._eval_epoch(phase = "val")
+            #     if res_test['accuracy']> best_acc_test:
+            #         best_acc_test = res_test['accuracy']
+            #         best_model = copy.deepcopy(self.model)
+            #         best_epoch = epoch
+        return best_acc_train,best_acc_test,best_model,best_epoch
 
 class MultiGPUTrainer:
     def __init__(

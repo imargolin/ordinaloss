@@ -1,4 +1,4 @@
-from ordinaloss.utils.metric_utils import RunningMetric, BinCounter, PredictionsCollector
+from ordinaloss.utils.metric_utils import RunningMetric, BinCounter, StatsCollector
 from ordinaloss.utils.metric_utils import accuracy_pytorch, mae_pytorch
 import torch.nn.functional as F
 from tqdm import tqdm
@@ -117,7 +117,6 @@ class OrdinalEngine:
             callback.on_train_start(self)
 
         for X, y in iterator:
-
             #Batch iteration
             X, y = self.prepare_input(X, y)
             batch_size = y.shape[0]
@@ -125,11 +124,8 @@ class OrdinalEngine:
             self._optimizer.zero_grad()
             y_pred = self.forward(X)
             
-            if self.n_classes==2:
-                y_pred_loss=y_pred[:,1]
-                loss = self._loss_fn(y_pred_loss, y)
-            else:
-                loss = self._loss_fn(y_pred, y)
+
+            loss = self._loss_fn(y_pred, y)
 
             loss.backward()
             
@@ -159,7 +155,7 @@ class OrdinalEngine:
             callback.on_train_end(self)
 
         self.epochs_trained+=1
-        
+        print(accuracy_metric.average)
         return {
             "loss": loss_metric.average,
             "accuracy": accuracy_metric.average
@@ -174,9 +170,13 @@ class OrdinalEngine:
         recall_score , precision_score = 0,0 
         accuracy_metric = RunningMetric()
         loss_metric = RunningMetric()
+        print(1)
+
         bin_counter = BinCounter(n_classes = self.n_classes, device=self.device)
-        pc = PredictionsCollector(self.n_classes, device=self.device)
-        
+        print(2)
+
+        pc = StatsCollector()
+        print(3)
 
         iterator = tqdm(loader, total = len(loader), desc= f"Evaluating...")
         for X, y in iterator:
@@ -184,11 +184,11 @@ class OrdinalEngine:
             batch_size = y.shape[0]
             y_pred = self.forward(X)
             
-            if self.n_classes==2:
-                y_pred_loss=y_pred[:,1]
-                loss = self._loss_fn(y_pred_loss, y)
-            else:
-                loss = self._loss_fn(y_pred, y)
+            # if self.n_classes==2:
+            #     y_pred_loss=y_pred[:,1]
+            #     loss = self._loss_fn(y_pred_loss, y)
+            # else:
+            loss = self._loss_fn(y_pred, y)
                 
             pc.update(y_pred, y)
             accuracy = accuracy_pytorch(y_pred, y)
@@ -273,11 +273,12 @@ class OrdinalEngine:
                 res = self._train_epoch()
                 if res['accuracy']> best_acc_train:
                     best_acc_train = res['accuracy']
-
-                if test_loader:
-                    res_test = self._eval_epoch(phase = "val")
-                    if res_test['accuracy']> best_acc_test:
-                        best_acc_test = res_test['accuracy']
-                        best_model = copy.deepcopy(self.model)
-                        best_epoch = epoch
+                    
+                # if test_loader:
+                #     print('here')
+                #     res_test = self._eval_epoch(phase = "val")
+                #     if res_test['accuracy']> best_acc_test:
+                #         best_acc_test = res_test['accuracy']
+                #         best_model = copy.deepcopy(self.model)
+                #         best_epoch = epoch
             return best_acc_train,best_acc_test,best_model,best_epoch
