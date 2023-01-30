@@ -114,7 +114,8 @@ class SingleGPUTrainer:
         self.num_classes = num_classes
         self.epochs_trained = 0
         
-        self.checkpoint_path = Path("models", f"{uuid.uuid4().hex}.pt")
+        self.checkpoint_path = "temp_results/model.pt"
+        self.test_predictions_path = "temp_results/test_prediction_path.csv"
 
     def forward(self, X):
         return F.softmax(self.model(X), dim = 1) #Normalized        
@@ -151,15 +152,15 @@ class SingleGPUTrainer:
             loader.set_postfix(
                 loss = loss_metric.average)
 
-        y_pred_all = collector.collect_y_pred().argmax(axis=1)
+        y_pred_all = collector.collect_y_pred() #(N, C)
+        y_pred_argmax = y_pred_all.argmax(axis=1) #(N,)
         y_true_all = collector.collect_y_true()
 
-        
-        mae = mean_absolute_error(y_true_all, y_pred_all)
-        accuracy = accuracy_score(y_true_all, y_pred_all)
-        cost = calc_cost_metric(y_true=y_true_all, y_pred=y_pred_all, n_classes=self.num_classes)
+        mae = mean_absolute_error(y_true_all, y_pred_argmax)
+        accuracy = accuracy_score(y_true_all, y_pred_argmax)
+        cost = calc_cost_metric(y_true=y_true_all, y_pred=y_pred_argmax, n_classes=self.num_classes)
        
-        distribution = np.bincount(y_pred_all, minlength=self.num_classes)
+        distribution = np.bincount(y_pred_argmax, minlength=self.num_classes)
         distribution = distribution/distribution.sum()
 
         self.epochs_trained +=1
@@ -193,16 +194,17 @@ class SingleGPUTrainer:
             loss_metric.update(loss.item(), batch_size)
             collector.update(y_pred, y)
         
-        y_pred_all = collector.collect_y_pred().argmax(axis=1)
+        y_pred_all = collector.collect_y_pred()
+        y_pred_argmax = y_pred_all.argmax(axis=1)
         y_true_all = collector.collect_y_true()
         
         #Some metrics
         
-        mae = mean_absolute_error(y_true_all, y_pred_all)
-        accuracy = accuracy_score(y_true_all, y_pred_all)
-        cost = calc_cost_metric(y_true=y_true_all, y_pred=y_pred_all, n_classes=self.num_classes)
+        mae = mean_absolute_error(y_true_all, y_pred_argmax)
+        accuracy = accuracy_score(y_true_all, y_pred_argmax)
+        cost = calc_cost_metric(y_true=y_true_all, y_pred=y_pred_argmax, n_classes=self.num_classes)
        
-        distribution = np.bincount(y_pred_all, minlength=self.num_classes)
+        distribution = np.bincount(y_pred_argmax, minlength=self.num_classes)
         distribution = distribution/distribution.sum()
 
         results = {
@@ -211,8 +213,14 @@ class SingleGPUTrainer:
             f"{phase}_accuracy":accuracy, #single value
             f"{phase}_mae": mae, #single value
             f"{phase}_cost": cost, #single value
-
             }
+
+        if phase =="test":
+            my_df = pd.DataFrame(y_pred_all)
+            path = f"test_predictions_phase_{self.epochs_trained}.csv"
+            my_df.to_csv(path)
+            mlflow.log_artifact(path)
+            os.remove(path)
 
         return results
 
@@ -236,20 +244,30 @@ class SingleGPUTrainer:
 
             if early_stopper.is_best_model:
                 #This is the best model so far, let's save it.
-                
-                best_epoch_idx = self.epochs_trained
                 self._save_checkpoint()
 
             if early_stopper.early_stop:
                 break #Model converged.
 
         print(f"Model Converged! the best validation loss is {early_stopper.min_validation_loss}")
-        self.model.load_state_dict(torch.load(self.checkpoint_path))
-        self.epochs_trained = best_epoch_idx
+        self._load_checkpoint()
     
     def _save_checkpoint(self):
-        ckp = self.model.state_dict()
+
+        ckp = {
+                "epoch": self.epochs_trained,
+                "model_state_dict":self.model.state_dict(),
+                "optimizer_state_dict": self.optimizer.state_dict(),
+              }
+
         torch.save(ckp, self.checkpoint_path)
+        mlflow.log_artifact(local_path=self.checkpoint_path)
+        
+    def _load_checkpoint(self):
+        ckp = torch.load(self.checkpoint_path)
+        self.epochs_trained = ckp["epoch"]
+        self.model.load_state_dict(ckp["model_state_dict"])
+        self.optimizer.load_state_dict(ckp["optimizer_state_dict"])
 
     def set_loss_fn(self, loss_fn:nn.Module):
         self.loss_fn = loss_fn
@@ -407,8 +425,6 @@ class SingleGPUTrainerMatan:
         self.loss_fn = loss_fn
         self.loss_fn.to(self.gpu_id)
         
-
-
 
 class MultiGPUTrainer:
     def __init__(

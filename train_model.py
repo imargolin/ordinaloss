@@ -16,6 +16,7 @@ import torch.multiprocessing as mp
 import numpy as np
 import sys
 import mlflow
+import json
 
 def ddp_setup(rank, world_size):
     os.environ["MASTER_ADDR"] = "localhost"
@@ -43,6 +44,7 @@ def train_single_gpu(
                     loss_type:str,
                     sch_gamma:float,
                     sch_step_size:int,
+                    constraints_path:str,
                     **kwargs
                     ):
 
@@ -55,9 +57,6 @@ def train_single_gpu(
     else:
         model = classification_model_vgg(model_architecture, num_classes=num_classes)
         dsets = create_dsets_knee("../datasets/kneeKL224/")
-
-    mlflow.end_run()
-    mlflow.log_params(args)
     
     if optim=="Adam":
         optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
@@ -77,8 +76,17 @@ def train_single_gpu(
         num_classes=num_classes
         )
 
-    constraints = torch.tensor([1.00, 1.00, 1.00, 0.03, 1.00], device= device_id)
+
+    print(f"Loading constraints from path: {constraints_path}")
+    with open(constraints_path) as f:
+        constraints = json.load(f)
+        constraints = torch.tensor(constraints, device= device_id)
+
+    print(f"Setting initial lambdas:")
     current_lambdas = torch.tensor([0.00, 0.00, 0.00, 0.00, 0.00], device= device_id)
+
+    mlflow.end_run()
+    mlflow.log_params(args)
 
     while True:
         mlflow.log_metrics({f"lambda_{k}": v for k,v in enumerate(current_lambdas.tolist())}, step = trainer.epochs_trained)
@@ -114,8 +122,10 @@ def train_single_gpu(
         test_distribution = torch.tensor(test_results["test_distribution"], device=device_id)
         print(f"Done training! info: {test_results}")
         
-        #Logging the distribution of test
+        #Logging the data of the test, obviously we can't tell what the right performances are.
         mlflow.log_metrics({f"test_dist_{k}": v for k,v in enumerate(test_distribution.tolist())}, step = trainer.epochs_trained)
+        mlflow.log_metrics(get_only_metrics(test_results), step = trainer.epochs_trained)
+
 
         if not satisfy_constraints(test_distribution, constraints):
             #modify loss function
@@ -123,10 +133,7 @@ def train_single_gpu(
 
         else:
             print("Done!")
-            mlflow.log_metrics(get_only_metrics(test_results), step = trainer.epochs_trained)
-            
             break
-            
 
 def train_multi_gpu(device:int, world_size:int, n_epochs:int, batch_size:int):
     ddp_setup(device, world_size=world_size)
@@ -161,6 +168,7 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description='simple distributed training job')
     
+    parser.add_argument('--constraints_path', type=str, help="The path for the constraints")
     parser.add_argument('--n_epochs', default=16, type=int, help='Total maximum epochs to train the model')
     parser.add_argument('--batch_size', default=32, type=int, help='Input batch size on each device')
     parser.add_argument('--n_procs', default=1, type=int, help="Total number of processes (GPUs used)")
@@ -183,18 +191,19 @@ if __name__ == "__main__":
     parser.add_argument('--sch_gamma', default=0.9, type=float, help="What is the gamma to change it?")
     
     args = vars(parser.parse_args()) #transform args to dictionary.
+    print(args)
 
     torch.manual_seed(0)
 
-    if args.n_procs==-1 or args.n_procs>1:
-        print(f"Training in a distributed mode, device id is {args.device_id}")
-        if args.n_procs==-1:
+    if args["n_procs"]==-1 or args["n_procs"]>1:
+        print(f"Training in a distributed mode, device id is {args['device_id']}")
+        if args["n_procs"]==-1:
             world_size = torch.cuda.device_count()
         else:
-            world_size = args.n_procs
+            world_size = args["n_procs"]
 
         mp.spawn(train_multi_gpu, args=(world_size, args.total_epochs, args.batch_size), nprocs=world_size)
 
     else:
-        print(f"Training on a single mode, device id is {args.device_id}")
+        print(f"Training on a single mode, device id is {args['device_id']}")
         train_single_gpu(**args)

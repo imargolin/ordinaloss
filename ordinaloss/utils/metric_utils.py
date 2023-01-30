@@ -32,6 +32,9 @@ class RunningMetric:
         self.average = self.running_total / self.num_updates
 
 class StatsCollector:
+    """
+    Used to aggregate data, the update method allow us to keep in memory the predictions of the entire epoch.
+    """
     def __init__(self):
         self.y_pred = []
         self.y_true = []
