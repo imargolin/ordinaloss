@@ -135,33 +135,33 @@ def train_single_gpu(
             print("Done!")
             break
 
-def train_multi_gpu(device:int, world_size:int, n_epochs:int, batch_size:int):
-    ddp_setup(device, world_size=world_size)
+# def train_multi_gpu(device:int, world_size:int, n_epochs:int, batch_size:int):
+#     ddp_setup(device, world_size=world_size)
 
-    print(f"Starting main on device {device}")
-    META_LEARNING_RATE = 10
-    LEARNING_RATE = 1.0e-3
-    WEIGHT_DECAY = 5.0e-2
-    COST_DISTANCE = 3
-    DIAGONAL_VALUE = 20
-    PATIENCE = 3
-    MIN_DELTA = 0.99
+#     print(f"Starting main on device {device}")
+#     META_LEARNING_RATE = 10
+#     LEARNING_RATE = 1.0e-3
+#     WEIGHT_DECAY = 5.0e-2
+#     COST_DISTANCE = 3
+#     DIAGONAL_VALUE = 20
+#     PATIENCE = 3
+#     MIN_DELTA = 0.99
 
-    model = classification_model_vgg("vgg19", num_classes=5)
-    dsets = create_datasets("../datasets/kneeKL224/")
-    optimizer = SGD(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
-    loaders = load_multi_gpu(dsets, batch_size)
+#     model = classification_model_vgg("vgg19", num_classes=5)
+#     dsets = create_datasets("../datasets/kneeKL224/")
+#     optimizer = SGD(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
+#     loaders = load_multi_gpu(dsets, batch_size)
 
-    cost_matrix = create_ordinal_cost_matrix(5, cost_distance=COST_DISTANCE, diagonal_value=DIAGONAL_VALUE)
-    csce_loss = CSCELoss(cost_matrix)
+#     cost_matrix = create_ordinal_cost_matrix(5, cost_distance=COST_DISTANCE, diagonal_value=DIAGONAL_VALUE)
+#     csce_loss = CSCELoss(cost_matrix)
     
-    trainer = MultiGPUTrainer(model, train_data=loaders["train"], validation_data=loaders["val"], optimizer = optimizer, gpu_id=device, save_every=3)
-    trainer.set_loss_fn(csce_loss) #The loss is assigned again
+#     trainer = MultiGPUTrainer(model, train_data=loaders["train"], validation_data=loaders["val"], optimizer = optimizer, gpu_id=device, save_every=3)
+#     trainer.set_loss_fn(csce_loss) #The loss is assigned again
 
-    trainer._train_epoch(epoch=0)
-    print(trainer._eval_epoch())
-    destroy_process_group()
-    return model
+#     trainer._train_epoch(epoch=0)
+#     print(trainer._eval_epoch())
+#     destroy_process_group()
+#     return model
 
 if __name__ == "__main__":
     #print(torch.cuda.device_count())
@@ -202,7 +202,7 @@ if __name__ == "__main__":
         else:
             world_size = args["n_procs"]
 
-        mp.spawn(train_multi_gpu, args=(world_size, args.total_epochs, args.batch_size), nprocs=world_size)
+        #mp.spawn(train_multi_gpu, args=(world_size, args.total_epochs, args.batch_size), nprocs=world_size)
 
     else:
         print(f"Training on a single mode, device id is {args['device_id']}")

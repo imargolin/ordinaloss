@@ -114,8 +114,8 @@ class SingleGPUTrainer:
         self.num_classes = num_classes
         self.epochs_trained = 0
         
-        self.checkpoint_path = "temp_results/model.pt"
-        self.test_predictions_path = "temp_results/test_prediction_path.csv"
+        self.checkpoint_path = "model.pt"
+        self.test_predictions_path = "test_prediction_path.csv"
 
     def forward(self, X):
         return F.softmax(self.model(X), dim = 1) #Normalized        
@@ -251,6 +251,7 @@ class SingleGPUTrainer:
 
         print(f"Model Converged! the best validation loss is {early_stopper.min_validation_loss}")
         self._load_checkpoint()
+        os.remove(self.checkpoint_path)
     
     def _save_checkpoint(self):
 
