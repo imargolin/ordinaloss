@@ -25,9 +25,9 @@ from ordinaloss.utils.metric_utils import accuracy_pytorch, mae_pytorch, calc_co
 from ordinaloss.utils.basic_utils import get_only_metrics
 from sklearn.metrics import accuracy_score, mean_absolute_error
 import os
-import uuid
 from pathlib import Path
 from torch.optim.lr_scheduler import StepLR
+import secrets
 
 print(f"loaded {__name__}")
 
@@ -113,9 +113,8 @@ class SingleGPUTrainer:
         self.save_every = save_every
         self.num_classes = num_classes
         self.epochs_trained = 0
-        
-        self.checkpoint_path = "model.pt"
-        self.test_predictions_path = "test_prediction_path.csv"
+        self.model_id = secrets.token_hex(nbytes=16)
+        self.checkpoint_path = f"{self.model_id}.pt"
 
     def forward(self, X):
         return F.softmax(self.model(X), dim = 1) #Normalized        
@@ -197,9 +196,11 @@ class SingleGPUTrainer:
         y_pred_all = collector.collect_y_pred()
         y_pred_argmax = y_pred_all.argmax(axis=1)
         y_true_all = collector.collect_y_true()
+
+        if phase =="test":
+            self.log_predictions(y_pred_all)
         
         #Some metrics
-        
         mae = mean_absolute_error(y_true_all, y_pred_argmax)
         accuracy = accuracy_score(y_true_all, y_pred_argmax)
         cost = calc_cost_metric(y_true=y_true_all, y_pred=y_pred_argmax, n_classes=self.num_classes)
@@ -214,15 +215,15 @@ class SingleGPUTrainer:
             f"{phase}_mae": mae, #single value
             f"{phase}_cost": cost, #single value
             }
-
-        if phase =="test":
-            my_df = pd.DataFrame(y_pred_all)
-            path = f"test_predictions_phase_{self.epochs_trained}.csv"
-            my_df.to_csv(path)
-            mlflow.log_artifact(path)
-            os.remove(path)
-
+            
         return results
+    
+    def log_predictions(self, y_pred_all):
+        my_df = pd.DataFrame(y_pred_all)
+        path = f"{self.model_id}_preds_{self.epochs_trained}.csv"
+        my_df.to_csv(path)
+        mlflow.log_artifact(path)
+        os.remove(path)
 
     def train_until_converge(self, n_epochs, patience, min_delta, sch_stepsize, sch_gamma) -> None:
 

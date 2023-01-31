@@ -1,10 +1,17 @@
 #!/usr/bin/env bash
 
 # This script is tagged as the best score so far. 
-python train_model.py --constraints_path "./constraints_configs/config_003.json" \
+base_path="./constraints_configs/"
+device_id=$1
+config_file=$2
+config_path="$base_path""config_""$config_file"".json"
+
+echo Training a model with the config path $config_path on device_id $device_id
+
+python train_model.py --constraints_path $config_path \
                       --batch_size 16 \
                       --cost_distance 3.0 \
-                      --device_id 2 \
+                      --device_id $device_id \
                       --diagonal_value 5.0 \
                       --is_mock 0 \
                       --loss_type "Sinim" \
