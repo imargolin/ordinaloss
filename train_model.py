@@ -17,6 +17,17 @@ import numpy as np
 import sys
 import mlflow
 import json
+import random
+
+#Let's make 
+seed = 42
+torch.manual_seed(seed)
+random.seed(seed)
+np.random.seed(seed)
+torch.cuda.seed_all()
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 
 def ddp_setup(rank, world_size):
     os.environ["MASTER_ADDR"] = "localhost"
@@ -192,8 +203,6 @@ if __name__ == "__main__":
     
     args = vars(parser.parse_args()) #transform args to dictionary.
     print(args)
-
-    torch.manual_seed(0)
 
     if args["n_procs"]==-1 or args["n_procs"]>1:
         print(f"Training in a distributed mode, device id is {args['device_id']}")

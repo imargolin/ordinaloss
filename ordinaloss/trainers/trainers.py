@@ -427,7 +427,6 @@ class SingleGPUTrainerMatan:
         self.loss_fn = loss_fn
         self.loss_fn.to(self.gpu_id)
         
-
 class MultiGPUTrainer:
     def __init__(
         self, 

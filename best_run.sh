@@ -4,7 +4,7 @@
 base_path="./constraints_configs/"
 device_id=$1
 config_file=$2
-config_path="$base_path""config_""$config_file"".json"
+config_path="$base_path""$config_file"".json"
 
 echo Training a model with the config path $config_path on device_id $device_id
 
