@@ -7,3 +7,4 @@ checkpoint.pt
 models
 results
 *.csv
+*.pt
