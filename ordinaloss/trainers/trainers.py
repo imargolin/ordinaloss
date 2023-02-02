@@ -265,7 +265,8 @@ class SingleGPUTrainerMatan:
         gpu_id: int,
         save_every: int,
         num_classes: int,
-        grad_norm:float = 15.0
+        grad_norm:float = 15.0,
+        opt_metric:str = 'val_loss'
         ):
 
         self.gpu_id = gpu_id
@@ -279,7 +280,8 @@ class SingleGPUTrainerMatan:
         
         self.checkpoint_path = Path("models", f"{uuid.uuid4().hex}.pt")
         self.grad_norm = grad_norm
-
+        self.opt_metric = opt_metric
+        
     def forward(self, X):
         return F.softmax(self.model(X), dim = 1) #Normalized        
 
@@ -394,17 +396,20 @@ class SingleGPUTrainerMatan:
             patience=patience, 
             min_delta=min_delta)
         
-        scheduler = StepLR(self.optimizer, step_size=sch_stepsize, gamma=sch_gamma, verbose=True)
+        # scheduler = StepLR(self.optimizer, step_size=sch_stepsize, gamma=sch_gamma, verbose=True)
 
         for _ in range(n_epochs):
             train_results = self._train_epoch()
-            scheduler.step()
+            # scheduler.step()
             val_results = self._eval_epoch(phase ="val")
 
             mlflow.log_metrics(get_only_metrics(val_results), step = self.epochs_trained)
             mlflow.log_metrics(get_only_metrics(train_results), step = self.epochs_trained)
-
-            early_stopper.step(val_results["val_loss"]) #One more step for validation loss, check whether should stop.
+            
+            if 'loss' in self.opt_metric:
+                early_stopper.step(val_results[self.opt_metric]) #One more step for validation loss, check whether should stop.
+            else:
+                early_stopper.step(-1 * val_results[self.opt_metric]) #One more step for validation loss, check whether should stop.
 
             if early_stopper.is_best_model:
                 #This is the best model so far, let's save it.

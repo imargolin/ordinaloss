@@ -5,3 +5,5 @@ __pycache__
 mlruns
 checkpoint.pt
 models
+results
+*.csv

@@ -20,7 +20,7 @@ from pathlib import Path
 
 from  mlflow.tracking import MlflowClient
 
-EXPERIMENT_NAME = "Maruloss"
+EXPERIMENT_NAME = "Maruloss_two_factor"
 
 def run_experiment(
     n_epochs:int,
@@ -31,6 +31,7 @@ def run_experiment(
     data_path: str,
     model_architecture:str,
     lamda:float,
+    gama:float,
     research_type:str,
     is_mock:int,
     momentum:float,
@@ -40,7 +41,8 @@ def run_experiment(
     sch_step_size:int,
     weight_decay:float,
     lr:float,
-    run_id:int
+    run_id:str,
+    opt_metric:str
     ):
 
     mlflow.end_run()
@@ -61,7 +63,8 @@ def run_experiment(
             "ce": np.array([[1,1],[1,1]]),
             "wce": np.array([[lamda,lamda],[1-lamda, 1-lamda]]),
             "csce": np.array([[lamda,1- lamda],[1- lamda, lamda]]),
-                        }
+            "csce_2": np.array([[lamda,1- lamda],[1- gama, gama]]),
+                            }
         
         cost_matrix = cost_matrix_mapper[research_type]
         
@@ -93,7 +96,8 @@ def run_experiment(
             optimizer=optimizer, 
             gpu_id=device_id, 
             num_classes=2, 
-            save_every=2
+            save_every=2,
+            opt_metric = opt_metric
             )
 
         #Setting the loss
@@ -116,17 +120,22 @@ def run_experiment(
         #                                                     sch_stepsize=sch_step_size)
         
         #Save results:
-        curr_exp_path = Path("results", str(run_id))
+        
+        curr_exp_path = Path("results",opt_metric, str(run_id))
         
         if not os.path.exists(curr_exp_path):
             os.makedirs(curr_exp_path)
             
-        if research_type !='csce':
-            pd.DataFrame ({'test_y_pred' : test_results['test_y_pred'],
-                       'test_y_true': test_results['test_y_true'] }).to_csv(str(curr_exp_path)+f'/test_predict_{research_type}.csv',index=False)
-        else:
+        if research_type =='csce':
             pd.DataFrame ({'test_y_pred' : test_results['test_y_pred'],
                        'test_y_true': test_results['test_y_true'] }).to_csv(str(curr_exp_path)+f'/test_predict_{lamda}.csv',index=False)
+            
+        elif research_type =='csce_2':
+            pd.DataFrame ({'test_y_pred' : test_results['test_y_pred'],
+                       'test_y_true': test_results['test_y_true'] }).to_csv(str(curr_exp_path)+f'/test_predict_{lamda}_{gama}.csv',index=False)
+        else:
+            pd.DataFrame ({'test_y_pred' : test_results['test_y_pred'],
+                       'test_y_true': test_results['test_y_true'] }).to_csv(str(curr_exp_path)+f'/test_predict_{research_type}.csv',index=False)
         
         print('prediciton saved ')
 
@@ -149,10 +158,12 @@ def run_experiment(
                     new_key = '_'+'_'.join(k.split('_')[1:])
                     d[new_key] = tuple(d[d['phase']+new_key] for d in ds)
                     
-        if research_type !='csce':
-            pd.DataFrame(d).to_csv(str(curr_exp_path)+f'/metrics_{research_type}.csv',index=False)
-        else:
+        if research_type =='csce':
             pd.DataFrame(d).to_csv(str(curr_exp_path)+f'/metrics_{lamda}.csv',index=False)
+        elif research_type =='csce_2':
+            pd.DataFrame(d).to_csv(str(curr_exp_path)+f'/metrics_{lamda}_{gama}.csv',index=False)
+        else:
+            pd.DataFrame(d).to_csv(str(curr_exp_path)+f'/metrics_{research_type}.csv',index=False)
 
         print('metrics results saved')
     
@@ -175,9 +186,11 @@ if __name__ == "__main__":
     parser.add_argument("--data_path", default="../datasets/DermMel/", type=str, help="asdasd")
     parser.add_argument("--model_architecture", default="vgg19", type=str, help="One of vgg19 or vgg16")
     parser.add_argument("--lamda", default=0.5, type=float, help= "asdasd")
+    parser.add_argument("--gama", default=0.5, type=float, help= "asdasd")
     parser.add_argument("--research_type", default="ce", type=str, help= "One of {ce, wce, csce}")
     parser.add_argument('--patience', default=5, type=int, help="The patience of the model for raise in loss")
-    parser.add_argument('--run_id', default=1, type=int, help="The patience of the model for raise in loss")
+    parser.add_argument('--opt_metric', default='val_loss', type=str, help="loss to opt the model by val_..")
+    parser.add_argument('--run_id', default=1, type=str, help="run id to save results")
 
     args = vars(parser.parse_args())
     run_experiment(**args)
