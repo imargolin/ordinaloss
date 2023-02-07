@@ -64,7 +64,6 @@ class BinCounter:
         self.num_updates += y_pred.shape[0] #batch_size
         self.average = self.running_total / self.num_updates
 
-
 @torch.no_grad()
 def accuracy_pytorch(y_pred, y):
     y_arg_pred = y_pred.argmax(axis=1)
