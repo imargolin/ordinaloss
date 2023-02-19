@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from ordinaloss.trainers.trainers import SingleGPUTrainer, SingleGPUTrainerMatan
-from ordinaloss.utils.pretrained_models import classification_model_vgg, DummyModel
+from ordinaloss.utils.pretrained_models import classification_model_vgg, DummyModel,classification_model_resnet
 from ordinaloss.utils.data_utils import create_dsets_melanoma, load_multi_gpu, load_single_gpu
 from torch.optim import SGD, Adam, RMSprop
 from torch.distributed import destroy_process_group, init_process_group
@@ -73,8 +73,14 @@ def run_experiment(
             print("====RUNNING MOCK VERSION=====")
             model = create_mock_model(num_classes=2)
             dsets = create_mock_dsets(num_classes=2)
-            
-        else:
+        
+        if 'resnet' in model_architecture:
+            print('res')
+            model = classification_model_resnet(model_architecture, num_classes=2)
+            dsets = create_dsets_melanoma(data_path) 
+                      
+        if 'vgg' in model_architecture:
+            print('vgg')
             model = classification_model_vgg(model_architecture, num_classes=2)
             dsets = create_dsets_melanoma(data_path)
 

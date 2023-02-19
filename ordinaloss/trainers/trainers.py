@@ -309,7 +309,7 @@ class SingleGPUTrainerMatan:
             loss = self.loss_fn(y_pred, y)
             loss.backward()
 
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 6)
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(),42)
 
             self.optimizer.step()
 
@@ -396,11 +396,11 @@ class SingleGPUTrainerMatan:
             patience=patience, 
             min_delta=min_delta)
         
-        # scheduler = StepLR(self.optimizer, step_size=sch_stepsize, gamma=sch_gamma, verbose=True)
+        scheduler = StepLR(self.optimizer, step_size=sch_stepsize, gamma=sch_gamma, verbose=True)
 
         for _ in range(n_epochs):
             train_results = self._train_epoch()
-            # scheduler.step()
+            scheduler.step()
             val_results = self._eval_epoch(phase ="val")
 
             mlflow.log_metrics(get_only_metrics(val_results), step = self.epochs_trained)
