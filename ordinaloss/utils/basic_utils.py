@@ -76,3 +76,6 @@ def modify_lambdas(
     new_lambdas = current_lambdas + step*meta_learning_rate 
 
     return new_lambdas.to(torch.float32)
+
+def modify_lambdas_extended():
+    pass
