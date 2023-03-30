@@ -6,3 +6,4 @@ mlruns
 checkpoint.pt
 models
 *.pt
+results

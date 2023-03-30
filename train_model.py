@@ -99,6 +99,7 @@ def train_single_gpu(
     mlflow.end_run()
     mlflow.log_params(args)
 
+
     while True:
         mlflow.log_metrics({f"lambda_{k}": v for k,v in enumerate(current_lambdas.tolist())}, step = trainer.epochs_trained)
 
@@ -145,7 +146,8 @@ def train_single_gpu(
         else:
             print("Done!")
             break
-
+        
+        print(test_results)
 # def train_multi_gpu(device:int, world_size:int, n_epochs:int, batch_size:int):
 #     ddp_setup(device, world_size=world_size)
 

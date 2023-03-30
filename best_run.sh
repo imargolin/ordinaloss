@@ -16,7 +16,7 @@ python train_model.py --constraints_path $config_path \
                       --is_mock 0 \
                       --loss_type "Sinim" \
                       --lr 5.0e-4 \
-                      --meta_lr 40.0 \
+                      --meta_lr 37.5 \
                       --min_delta 1.0 \
                       --model_architecture vgg19 \
                       --momentum 0.9 \
@@ -24,7 +24,7 @@ python train_model.py --constraints_path $config_path \
                       --n_procs 1 \
                       --num_classes 5 \
                       --optim SGD \
-                      --patience 16 \
+                      --patience 10 \
                       --sch_gamma 0.9 \
                       --sch_step_size 5 \
                       --weight_decay 5.0e-4
