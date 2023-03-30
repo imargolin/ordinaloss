@@ -16,7 +16,6 @@ def calc_cost_metric(y_pred, y_true, n_classes=5):
     r = np.arange(0,n_classes)
     n = y_pred.shape[0]
     cost_matrix = 2 * np.abs(r-r[:, None])+1
-    print(cost_matrix)
     cm = confusion_matrix(y_pred=y_pred, y_true=y_true, labels = np.arange(0,n_classes))
     return (cm * cost_matrix).sum()/n
 
