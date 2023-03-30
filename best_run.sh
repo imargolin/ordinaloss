@@ -4,9 +4,10 @@
 base_path="./constraints_configs/"
 device_id=$1
 config_file=$2
+fold_number=$3
 config_path="$base_path""$config_file"".json"
 
-echo Training a model with the config path $config_path on device_id $device_id
+echo Training a model with the config path $config_path on device_id $device_id , This is fold $fold_number
 
 python train_model.py --constraints_path $config_path \
                       --batch_size 16 \
@@ -27,4 +28,5 @@ python train_model.py --constraints_path $config_path \
                       --patience 10 \
                       --sch_gamma 0.9 \
                       --sch_step_size 5 \
-                      --weight_decay 5.0e-4
+                      --weight_decay 5.0e-4 \
+                      --fold_number $fold_number

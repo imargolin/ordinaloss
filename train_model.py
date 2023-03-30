@@ -56,6 +56,7 @@ def train_single_gpu(
                     sch_gamma:float,
                     sch_step_size:int,
                     constraints_path:str,
+                    fold_number:int,
                     **kwargs
                     ):
 
@@ -67,7 +68,7 @@ def train_single_gpu(
 
     else:
         model = classification_model_vgg(model_architecture, num_classes=num_classes)
-        dsets = create_dsets_knee("../datasets/kneeKL224/")
+        dsets = create_dsets_knee(f"../datasets/kneeKL224_all/fold{fold_number}")
     
     if optim=="Adam":
         optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
@@ -138,7 +139,6 @@ def train_single_gpu(
         mlflow.log_metrics({f"test_dist_{k}": v for k,v in enumerate(test_distribution.tolist())}, step = trainer.epochs_trained)
         mlflow.log_metrics(get_only_metrics(test_results), step = trainer.epochs_trained)
 
-
         if not satisfy_constraints(test_distribution, constraints):
             #modify loss function
             current_lambdas = modify_lambdas(constraints, test_distribution, current_lambdas, meta_lr).to(device=device_id)
@@ -148,33 +148,6 @@ def train_single_gpu(
             break
         
         print(test_results)
-# def train_multi_gpu(device:int, world_size:int, n_epochs:int, batch_size:int):
-#     ddp_setup(device, world_size=world_size)
-
-#     print(f"Starting main on device {device}")
-#     META_LEARNING_RATE = 10
-#     LEARNING_RATE = 1.0e-3
-#     WEIGHT_DECAY = 5.0e-2
-#     COST_DISTANCE = 3
-#     DIAGONAL_VALUE = 20
-#     PATIENCE = 3
-#     MIN_DELTA = 0.99
-
-#     model = classification_model_vgg("vgg19", num_classes=5)
-#     dsets = create_datasets("../datasets/kneeKL224/")
-#     optimizer = SGD(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
-#     loaders = load_multi_gpu(dsets, batch_size)
-
-#     cost_matrix = create_ordinal_cost_matrix(5, cost_distance=COST_DISTANCE, diagonal_value=DIAGONAL_VALUE)
-#     csce_loss = CSCELoss(cost_matrix)
-    
-#     trainer = MultiGPUTrainer(model, train_data=loaders["train"], validation_data=loaders["val"], optimizer = optimizer, gpu_id=device, save_every=3)
-#     trainer.set_loss_fn(csce_loss) #The loss is assigned again
-
-#     trainer._train_epoch(epoch=0)
-#     print(trainer._eval_epoch())
-#     destroy_process_group()
-#     return model
 
 if __name__ == "__main__":
     #print(torch.cuda.device_count())
@@ -202,7 +175,8 @@ if __name__ == "__main__":
     parser.add_argument('--loss_type', default="CSCE", type=str, help="Can be one of CSCE or Sinim")
     parser.add_argument('--sch_step_size', default=5, type=int, help="After how many epochs do we change lr?")
     parser.add_argument('--sch_gamma', default=0.9, type=float, help="What is the gamma to change it?")
-    
+    parser.add_argument('--fold_number', default=0, type=int, help="The fold number, between 0 to 4")
+
     args = vars(parser.parse_args()) #transform args to dictionary.
     print(args)
 
