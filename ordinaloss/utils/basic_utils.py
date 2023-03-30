@@ -77,5 +77,20 @@ def modify_lambdas(
 
     return new_lambdas.to(torch.float32)
 
-def modify_lambdas_extended():
-    pass
+@torch.no_grad()
+def modify_lambdas_extended(
+    constraints: torch.Tensor, 
+    test_dist: torch.Tensor, 
+    current_lambdas: torch.Tensor, 
+    meta_learning_rate: float = 0.1,
+    budget_booster: float = 10.0
+    ) -> torch.Tensor: 
+    
+    current_budget = current_lambdas.sum() #This is the current budget. 
+    new_budget = current_budget + budget_booster
+    step = torch.nn.functional.relu(test_dist - constraints)
+    new_lambdas = current_lambdas + step*meta_learning_rate
+    new_lambdas = new_lambdas/new_lambdas.sum() #Should be normalized now
+    new_lambdas = new_lambdas*new_budget
+
+    return new_lambdas.to(torch.float32)
