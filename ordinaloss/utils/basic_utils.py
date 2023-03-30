@@ -83,7 +83,7 @@ def modify_lambdas_extended(
     test_dist: torch.Tensor, 
     current_lambdas: torch.Tensor, 
     meta_learning_rate: float = 0.1,
-    budget_booster = float = 10.0,
+    budget_booster = float = 10.0
     ) -> torch.Tensor: 
     
     current_budget = current_lambdas.sum() #This is the current budget. 
